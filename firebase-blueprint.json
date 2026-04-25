@@ -1,0 +1,110 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System users for facial recognition and personnel management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "faceDescriptor": { "type": "array", "items": { "type": "number" } },
+        "image": { "type": "string", "format": "data-url" }
+      },
+      "required": ["id", "name", "faceDescriptor", "image"]
+    },
+    "AttendanceLog": {
+      "title": "AttendanceLog",
+      "description": "Clock-in/out and break logs for users.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "type": { "type": "string", "enum": ["arrival", "break_start", "break_end", "departure"] },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "type", "timestamp"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory products.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "description": { "type": "string" },
+        "unit": { "type": "string" },
+        "lowStockThreshold": { "type": "number" },
+        "location": { "type": "string" }
+      },
+      "required": ["id", "name", "unit", "lowStockThreshold"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Stock movements (entry/exit).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "type": { "type": "string", "enum": ["entry", "exit"] },
+        "quantity": { "type": "number" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "observation": { "type": "string" },
+        "reason": { "type": "string" }
+      },
+      "required": ["id", "productId", "productName", "type", "quantity", "userId", "userName", "timestamp"]
+    },
+    "WorkLog": {
+      "title": "WorkLog",
+      "description": "Daily work reports.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "reportNumber": { "type": "number" },
+        "project": { "type": "string" },
+        "client": { "type": "string" },
+        "residentHead": { "type": "string" },
+        "workAddress": { "type": "string" },
+        "dayOfWeek": { "type": "string" },
+        "processItem": { "type": "string" },
+        "advancePercentage": { "type": "number" },
+        "advanceM2": { "type": "number" },
+        "weather": { "type": "object" },
+        "personnel": { "type": "array" },
+        "activities": { "type": "array" },
+        "safety": { "type": "object" },
+        "problems": { "type": "array" },
+        "nextDayPlan": { "type": "array" },
+        "photos": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "date", "reportNumber", "project", "client"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Collection of system users."
+    },
+    "attendance": {
+      "schema": "AttendanceLog",
+      "description": "Collection of attendance records."
+    },
+    "products": {
+      "schema": "Product",
+      "description": "Collection of inventory items."
+    },
+    "inventoryMovements": {
+      "schema": "InventoryMovement",
+      "description": "Collection of inventory movement history."
+    },
+    "workLogs": {
+      "schema": "WorkLog",
+      "description": "Collection of daily work reports."
+    }
+  }
+}

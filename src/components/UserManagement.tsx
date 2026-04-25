@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Camera, UserPlus, RefreshCw, Users } from 'lucide-react';
 import { User } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
+import { firestoreService } from '@/src/lib/firestoreService';
 import { cn } from '@/lib/utils';
 
 interface UserManagementProps {
@@ -95,25 +96,24 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
         return;
       }
 
-      const method = editingUser ? 'PUT' : 'POST';
-      const url = editingUser ? `/api/users/${encodeURIComponent(editingUser.id)}` : '/api/users';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      if (editingUser) {
+        await firestoreService.update('users', editingUser.id, {
           ...formData,
           faceDescriptor: Array.from(descriptor)
-        })
-      });
-
-      if (res.ok) {
-        toast.success(editingUser ? 'Usuario actualizado' : 'Usuario creado');
-        onUpdate();
-        setIsAdding(false);
-        setEditingUser(null);
-        setFormData({ id: '', name: '', image: '' });
+        });
+        toast.success('Usuario actualizado');
+      } else {
+        await firestoreService.add('users', {
+          ...formData,
+          faceDescriptor: Array.from(descriptor)
+        });
+        toast.success('Usuario creado');
       }
+
+      onUpdate();
+      setIsAdding(false);
+      setEditingUser(null);
+      setFormData({ id: '', name: '', image: '' });
     } catch (error) {
       toast.error('Error al guardar usuario');
     }
@@ -122,10 +122,8 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
   const handleDelete = async (id: string) => {
     toast.promise(
       async () => {
-        const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error('Failed to delete');
+        await firestoreService.delete('users', id);
         onUpdate();
-        return res;
       },
       {
         loading: 'Eliminando usuario...',

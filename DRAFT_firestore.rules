@@ -1,0 +1,55 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Since this app seems to be a local tool for work sites, 
+    // it might not use Firebase Auth in a traditional "user account" way 
+    // but rather shared credentials or public-site access (controlled by proxy/environment).
+    // However, I will implement rules that assume users are authenticated for safety.
+    // IF the app currently uses "public" access, we might need to adjust or implement Firebase Auth.
+    // For now, let's assume isSignedIn() is required.
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(userId);
+      allow delete: if isSignedIn();
+    }
+
+    match /attendance/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId);
+      allow update, delete: if isSignedIn();
+    }
+
+    match /products/{productId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && isValidId(productId);
+      allow delete: if isSignedIn();
+    }
+
+    match /inventoryMovements/{movId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(movId);
+      allow update, delete: if isSignedIn();
+    }
+
+    match /workLogs/{logId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidId(logId);
+      allow update, delete: if isSignedIn();
+    }
+  }
+}

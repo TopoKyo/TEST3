@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { toast } from 'sonner';
 import { Download, Upload, FileSpreadsheet, Calendar, History, Trash2, Users } from 'lucide-react';
 import { AttendanceLog, User, ATTENDANCE_LABELS, AttendanceType } from '@/src/types';
+import { firestoreService } from '@/src/lib/firestoreService';
 import { format, parseISO, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -101,17 +102,64 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
         const wb = XLSX.read(bstr, { type: 'binary' });
         const wsname = wb.SheetNames[0];
         const ws = wb.Sheets[wsname];
-        const data = XLSX.utils.sheet_to_json(ws);
+        const data = XLSX.utils.sheet_to_json(ws) as any[];
 
-        // This is a simplified import for the UI
-        // In a real app we'd map Excel headers to our types
-        console.log('Imported data:', data);
-        toast.info('La importación requiere mapeo de campos. Datos detectados en consola.');
+        toast.loading('Importando registros...');
+        let importedCount = 0;
+
+        for (const row of data) {
+          // Expected columns: 'ID Usuario', 'Fecha', 'Hora', 'Tipo de Marcaje'
+          const userId = row['ID Usuario'] || row['userId'];
+          const dateStr = row['Fecha'];
+          const timeStr = row['Hora'];
+          const typeLabel = row['Tipo de Marcaje'] || row['type'];
+
+          if (!userId || !dateStr || !timeStr || !typeLabel) continue;
+
+          // Find user name
+          const user = users.find(u => u.id === String(userId));
+          if (!user) continue;
+
+          // Find type constant from label
+          const type = (Object.keys(ATTENDANCE_LABELS) as AttendanceType[]).find(
+            key => ATTENDANCE_LABELS[key].toLowerCase() === String(typeLabel).toLowerCase()
+          );
+
+          if (!type) continue;
+
+          // Parse timestamp
+          // dateStr is likely dd/mm/yyyy
+          // timeStr is likely hh:mm:ss
+          const [d, m, y] = String(dateStr).split('/');
+          const [hh, mm, ss] = String(timeStr).split(':');
+          const timestamp = new Date(Number(y), Number(m) - 1, Number(d), Number(hh), Number(mm), Number(ss)).toISOString();
+
+          const newLog: AttendanceLog = {
+            id: Math.random().toString(36).substr(2, 9),
+            userId: user.id,
+            userName: user.name,
+            type,
+            timestamp
+          };
+
+          await firestoreService.add('attendance', newLog);
+          importedCount++;
+        }
+
+        toast.dismiss();
+        if (importedCount > 0) {
+          toast.success(`${importedCount} registros importados correctamente`);
+          onUpdate();
+        } else {
+          toast.error('No se pudieron importar registros. Verifique el formato.');
+        }
       } catch (error) {
+        toast.dismiss();
         toast.error('Error al leer el archivo Excel');
       }
     };
     reader.readAsBinaryString(file);
+    e.target.value = '';
   };
 
   const formatHours = (minutes: number) => {

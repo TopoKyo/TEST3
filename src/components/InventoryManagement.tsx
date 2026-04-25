@@ -30,6 +30,7 @@ import {
 } from 'lucide-react';
 import { Product, InventoryMovement, User, MovementType } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
+import { firestoreService } from '@/src/lib/firestoreService';
 import { format, parseISO, parse, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -94,12 +95,12 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [prodRes, movRes] = await Promise.all([
-        fetch('/api/products'),
-        fetch('/api/movements')
+      const [prodData, movData] = await Promise.all([
+        firestoreService.getAll<Product>('products'),
+        firestoreService.getAll<InventoryMovement>('inventoryMovements')
       ]);
-      setProducts(await prodRes.json());
-      setMovements(await movRes.json());
+      setProducts(prodData);
+      setMovements(movData);
     } catch (error) {
       toast.error('Error al cargar datos de inventario');
     } finally {
@@ -118,24 +119,16 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
     if (!productForm.id || !productForm.name) return;
 
     try {
-      const method = editingProduct ? 'PUT' : 'POST';
-      const url = editingProduct ? `/api/products/${editingProduct.id}` : '/api/products';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productForm)
-      });
-
-      if (res.ok) {
-        toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
-        setIsProductDialogOpen(false);
-        setEditingProduct(null);
-        fetchData();
+      if (editingProduct) {
+        await firestoreService.update('products', editingProduct.id, productForm);
+        toast.success('Producto actualizado');
       } else {
-        const err = await res.text();
-        toast.error(err);
+        await firestoreService.add('products', productForm as Product);
+        toast.success('Producto creado');
       }
+      setIsProductDialogOpen(false);
+      setEditingProduct(null);
+      fetchData();
     } catch (error) {
       toast.error('Error al guardar producto');
     }
@@ -178,20 +171,14 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
         reason: movementForm.reason
       };
 
-      const res = await fetch('/api/movements', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newMovement)
-      });
+      await firestoreService.add('inventoryMovements', newMovement);
 
-      if (res.ok) {
-        toast.success('Movimiento registrado');
-        setIsMovementDialogOpen(false);
-        setRecognizedUser(null);
-        setIsScanning(false);
-        fetchData();
-        setMovementForm({ ...movementForm, quantity: 1, observation: '', reason: '' });
-      }
+      toast.success('Movimiento registrado');
+      setIsMovementDialogOpen(false);
+      setRecognizedUser(null);
+      setIsScanning(false);
+      fetchData();
+      setMovementForm({ ...movementForm, quantity: 1, observation: '', reason: '' });
     } catch (error) {
       toast.error('Error al registrar movimiento');
     }
@@ -375,46 +362,34 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
         if (existing) {
           targetProductId = existing.id;
           updated++;
-          // Update location/threshold if changed? Or just stock.
-          // The prompt says "Si el producto ya existe, actualizar stock sumando la cantidad"
         } else {
           // Create new
           const newId = `PROD-${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
-          const res = await fetch('/api/products', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: newId,
-              name: item.name,
-              category: item.category,
-              unit: item.unit,
-              location: item.location,
-              lowStockThreshold: 5
-            })
-          });
-          if (res.ok) {
-            targetProductId = newId;
-            created++;
-          }
+          await firestoreService.add('products', {
+            id: newId,
+            name: item.name,
+            category: item.category,
+            unit: item.unit,
+            location: item.location,
+            lowStockThreshold: 5
+          } as Product);
+          targetProductId = newId;
+          created++;
         }
 
         if (targetProductId) {
           // Add movement
-          await fetch('/api/movements', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              id: Math.random().toString(36).substr(2, 9),
-              productId: targetProductId,
-              productName: item.name,
-              type: 'entry',
-              quantity: item.quantity,
-              userId: 'system',
-              userName: item.lastUser,
-              timestamp: item.lastMov,
-              observation: 'Importado de archivo excel'
-            })
-          });
+          await firestoreService.add('inventoryMovements', {
+            id: Math.random().toString(36).substr(2, 9),
+            productId: targetProductId,
+            productName: item.name,
+            type: 'entry',
+            quantity: item.quantity,
+            userId: 'system',
+            userName: item.lastUser,
+            timestamp: item.lastMov,
+            observation: 'Importado de archivo excel'
+          } as InventoryMovement);
         }
       } catch (e) {
         console.error('Error importing row', i, e);

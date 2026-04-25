@@ -15,6 +15,9 @@ import InventoryManagement from './components/InventoryManagement';
 import DailyLog from './components/DailyLog';
 import { User, AttendanceLog } from './types';
 import { faceService } from './lib/faceService';
+import { firestoreService } from './lib/firestoreService';
+import { doc, getDocFromServer } from 'firebase/firestore';
+import { db } from './lib/firebase';
 
 export default function App() {
   const [users, setUsers] = useState<User[]>([]);
@@ -22,15 +25,24 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    async function testConnection() {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if(error instanceof Error && error.message.includes('the client is offline')) {
+          console.error("Please check your Firebase configuration.");
+        }
+      }
+    }
+    testConnection();
+
     async function init() {
       try {
         await faceService.loadModels();
-        const [usersRes, logsRes] = await Promise.all([
-          fetch('/api/users'),
-          fetch('/api/logs')
+        const [usersData, logsData] = await Promise.all([
+          firestoreService.getAll<User>('users'),
+          firestoreService.getAll<AttendanceLog>('attendance')
         ]);
-        const usersData = await usersRes.json();
-        const logsData = await logsRes.json();
         setUsers(usersData);
         setLogs(logsData);
       } catch (error) {
@@ -44,12 +56,12 @@ export default function App() {
   }, []);
 
   const refreshData = async () => {
-    const [usersRes, logsRes] = await Promise.all([
-      fetch('/api/users'),
-      fetch('/api/logs')
+    const [usersData, logsData] = await Promise.all([
+      firestoreService.getAll<User>('users'),
+      firestoreService.getAll<AttendanceLog>('attendance')
     ]);
-    setUsers(await usersRes.json());
-    setLogs(await logsRes.json());
+    setUsers(usersData);
+    setLogs(logsData);
   };
 
   if (loading) {

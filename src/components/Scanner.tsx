@@ -4,8 +4,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight } from 'lucide-react';
-import { User, AttendanceType, ATTENDANCE_LABELS } from '@/src/types';
+import { User, AttendanceType, ATTENDANCE_LABELS, AttendanceLog } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
+import { firestoreService } from '@/src/lib/firestoreService';
+import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
+import { db } from '@/src/lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ScannerProps {
@@ -50,14 +53,22 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
               const user = users.find(u => u.id === bestMatch.label);
               if (user) {
                 // Fetch last log for this user to prevent duplicates
-                const userLogs = await fetch(`/api/logs?userId=${user.id}`).then(r => r.json());
-                const userFilteredLogs = userLogs.filter((l: any) => l.userId === user.id)
-                  .sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-                
-                if (userFilteredLogs.length > 0) {
-                  setLastLogType(userFilteredLogs[0].type);
-                } else {
-                  setLastLogType(null);
+                try {
+                  const logsRef = collection(db, 'attendance');
+                  const q = query(
+                    logsRef, 
+                    where('userId', '==', user.id), 
+                    orderBy('timestamp', 'desc'), 
+                    limit(1)
+                  );
+                  const snap = await getDocs(q);
+                  if (!snap.empty) {
+                    setLastLogType(snap.docs[0].data().type as AttendanceType);
+                  } else {
+                    setLastLogType(null);
+                  }
+                } catch (e) {
+                  console.error('Error fetching last log:', e);
                 }
 
                 setRecognizedUser(user);
@@ -86,7 +97,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
 
     try {
       const now = new Date();
-      const newLog = {
+      const newLog: AttendanceLog = {
         id: Math.random().toString(36).substr(2, 9),
         userId: recognizedUser.id,
         userName: recognizedUser.name,
@@ -94,18 +105,12 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
         timestamp: now.toISOString()
       };
 
-      const res = await fetch('/api/logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newLog)
-      });
-
-      if (res.ok) {
-        toast.success(`Asistencia de ${ATTENDANCE_LABELS[type]} registrada para ${recognizedUser.name}`);
-        onLogCreated();
-        setRecognizedUser(null);
-        setIsScanning(true);
-      }
+      await firestoreService.add('attendance', newLog);
+      
+      toast.success(`Asistencia de ${ATTENDANCE_LABELS[type]} registrada para ${recognizedUser.name}`);
+      onLogCreated();
+      setRecognizedUser(null);
+      setIsScanning(true);
     } catch (error) {
       toast.error('Error al registrar asistencia');
     } finally {

@@ -38,6 +38,7 @@ import {
   SafetyChecklist,
   AttendanceLog
 } from '@/src/types';
+import { firestoreService } from '@/src/lib/firestoreService';
 import { format, parseISO, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
@@ -110,8 +111,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/worklogs');
-      const data = await res.json();
+      const data = await firestoreService.getAll<WorkLog>('workLogs');
       setLogs(data);
     } catch (e) {
       toast.error('Error al cargar bitácoras');
@@ -155,20 +155,16 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const handleSave = async () => {
     if (!currentLog) return;
     try {
-      const method = logs.some(l => l.id === currentLog.id) ? 'PUT' : 'POST';
-      const url = method === 'PUT' ? `/api/worklogs/${currentLog.id}` : '/api/worklogs';
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(currentLog)
-      });
-
-      if (res.ok) {
-        toast.success('Bitácora guardada correctamente');
-        fetchLogs();
-        setIsEditing(false);
+      const existing = logs.some(l => l.id === currentLog.id);
+      if (existing) {
+        await firestoreService.update('workLogs', currentLog.id, currentLog);
+      } else {
+        await firestoreService.add('workLogs', currentLog);
       }
+
+      toast.success('Bitácora guardada correctamente');
+      fetchLogs();
+      setIsEditing(false);
     } catch (e) {
       toast.error('Error al guardar');
     }
