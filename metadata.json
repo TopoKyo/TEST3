@@ -1,0 +1,10 @@
+{
+  "name": "Vertical Aplicación",
+  "description": "Sistema avanzado de control de asistencia basado en reconocimiento facial para trabajos verticales y altura. Permite el registro de entradas, salidas y bitácoras de obra.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "FACIAL_RECOGNITION"
+  ]
+}
