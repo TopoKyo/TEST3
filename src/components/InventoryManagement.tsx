@@ -624,7 +624,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                             <Label>ID del Producto</Label>
                             <Input 
                               disabled={!!editingProduct}
-                              value={productForm.id} 
+                              value={productForm.id || ''} 
                               onChange={e => setProductForm({...productForm, id: e.target.value.toUpperCase()})}
                               className="rounded-xl h-11 border-neutral-200"
                               placeholder="PROD-001"
@@ -634,7 +634,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                           <div className="space-y-2">
                             <Label>Categoría</Label>
                             <Input 
-                              value={productForm.category} 
+                              value={productForm.category || ''} 
                               onChange={e => setProductForm({...productForm, category: e.target.value})}
                               className="rounded-xl h-11 border-neutral-200"
                               placeholder="Herramientas"
@@ -645,7 +645,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                           <div className="space-y-2">
                             <Label>Nombre del Producto</Label>
                             <Input 
-                              value={productForm.name} 
+                              value={productForm.name || ''} 
                               onChange={e => setProductForm({...productForm, name: e.target.value})}
                               className="rounded-xl h-11 border-neutral-200"
                               placeholder="Tornillo Hexagonal"
@@ -665,7 +665,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label>Unidad de Medida</Label>
-                            <Select value={productForm.unit} onValueChange={v => setProductForm({...productForm, unit: v})}>
+                            <Select value={productForm.unit || ''} onValueChange={v => setProductForm({...productForm, unit: v})}>
                               <SelectTrigger className="rounded-xl h-11 border-neutral-200">
                                 <SelectValue placeholder="Seleccionar" />
                               </SelectTrigger>
@@ -682,7 +682,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                             <Label>Alerta Stock Bajo</Label>
                             <Input 
                               type="number"
-                              value={productForm.lowStockThreshold} 
+                              value={productForm.lowStockThreshold ?? 5} 
                               onChange={e => setProductForm({...productForm, lowStockThreshold: Number(e.target.value)})}
                               className="rounded-xl h-11 border-neutral-200"
                               min={1}
@@ -693,7 +693,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                         <div className="space-y-2">
                           <Label>Descripción (Opcional)</Label>
                           <Input 
-                            value={productForm.description} 
+                            value={productForm.description || ''} 
                             onChange={e => setProductForm({...productForm, description: e.target.value})}
                             className="rounded-xl h-11 border-neutral-200"
                             placeholder="Detalles sobre el material..."
@@ -898,7 +898,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
             <div className="space-y-6">
               <div className="space-y-2">
                 <Label>Producto</Label>
-                <Select value={movementForm.productId} onValueChange={v => setMovementForm({...movementForm, productId: v})}>
+                <Select value={movementForm.productId || ''} onValueChange={v => setMovementForm({...movementForm, productId: v})}>
                   <SelectTrigger className="rounded-xl h-11 border-neutral-200">
                     <SelectValue placeholder="Seleccionar producto..." />
                   </SelectTrigger>
@@ -914,7 +914,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                 <Label>Cantidad</Label>
                 <Input 
                   type="number"
-                  value={movementForm.quantity} 
+                  value={movementForm.quantity ?? 1} 
                   onChange={e => setMovementForm({...movementForm, quantity: Number(e.target.value)})}
                   className="rounded-xl h-11 border-neutral-200"
                   min={1}
@@ -924,7 +924,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
               {movementType === 'entry' ? (
                 <div className="space-y-2">
                   <Label>Responsable (Opcional)</Label>
-                  <Select value={movementForm.userId} onValueChange={v => setMovementForm({...movementForm, userId: v})}>
+                  <Select value={movementForm.userId || ''} onValueChange={v => setMovementForm({...movementForm, userId: v})}>
                     <SelectTrigger className="rounded-xl h-11 border-neutral-200">
                       <SelectValue placeholder="Quien recibe..." />
                     </SelectTrigger>
@@ -940,7 +940,7 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
               <div className="space-y-2">
                 <Label>{movementType === 'entry' ? 'Observaciones' : 'Motivo / Destino'}</Label>
                 <Input 
-                  value={movementType === 'entry' ? movementForm.observation : movementForm.reason} 
+                  value={(movementType === 'entry' ? movementForm.observation : movementForm.reason) || ''} 
                   onChange={e => setMovementForm({...movementForm, [movementType === 'entry' ? 'observation' : 'reason']: e.target.value})}
                   className="rounded-xl h-11 border-neutral-200"
                   placeholder={movementType === 'entry' ? "Ej: Pedido proveedor..." : "Ej: Reparación oficina..."}

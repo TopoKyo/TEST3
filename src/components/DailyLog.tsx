@@ -246,19 +246,52 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     setCurrentLog({ ...currentLog, [section]: items });
   };
 
-  const exportPDF = () => {
+  const getBase64ImageFromURL = (url: string) => {
+    return new Promise<string>((resolve, reject) => {
+      const img = new Image();
+      img.setAttribute('crossOrigin', 'anonymous');
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0);
+        const dataURL = canvas.toDataURL('image/png');
+        resolve(dataURL);
+      };
+      img.onerror = (error) => {
+        reject(error);
+      };
+      img.src = url;
+    });
+  };
+
+  const exportPDF = async () => {
     if (!currentLog) return;
     const doc = new jsPDF();
     
+    // Add Logo
+    try {
+      const logoData = await getBase64ImageFromURL('/logo.png');
+      doc.addImage(logoData, 'PNG', 15, 10, 25, 25);
+    } catch (e) {
+      console.warn('Logo could not be loaded for PDF', e);
+    }
+
     // Header
-    doc.setFontSize(20);
-    doc.text('BITÁCORA DIARIA DE OBRA', 105, 15, { align: 'center' });
+    doc.setFontSize(22);
+    doc.setTextColor(40, 40, 40);
+    doc.text('BITÁCORA DIARIA DE OBRA', 110, 22, { align: 'center' });
     doc.setFontSize(10);
-    doc.text(`Informe N°: ${currentLog.reportNumber} | Fecha: ${currentLog.date} (${currentLog.dayOfWeek})`, 105, 22, { align: 'center' });
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Informe N°: ${currentLog.reportNumber} | Fecha: ${currentLog.date} (${currentLog.dayOfWeek})`, 110, 29, { align: 'center' });
+    
+    doc.setDrawColor(200, 200, 200);
+    doc.line(15, 38, 195, 38);
 
     // General Info Table
     autoTable(doc, {
-      startY: 30,
+      startY: 45,
       head: [['DATOS GENERALES DEL PROYECTO', '']],
       body: [
         ['Proyecto:', currentLog.project],
@@ -408,34 +441,34 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label>Proyecto</Label>
-                    <Input value={currentLog?.project} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, project: e.target.value} : null)} className="rounded-xl" />
+                    <Input value={currentLog?.project || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, project: e.target.value} : null)} className="rounded-xl" />
                   </div>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
-                    <Input value={currentLog?.client} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, client: e.target.value} : null)} className="rounded-xl" />
+                    <Input value={currentLog?.client || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, client: e.target.value} : null)} className="rounded-xl" />
                   </div>
                   <div className="space-y-2">
                     <Label>Jefe Residente</Label>
-                    <Input value={currentLog?.residentHead} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, residentHead: e.target.value} : null)} className="rounded-xl" />
+                    <Input value={currentLog?.residentHead || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, residentHead: e.target.value} : null)} className="rounded-xl" />
                   </div>
                   <div className="space-y-2">
                     <Label>Dirección de Obra</Label>
-                    <Input value={currentLog?.workAddress} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, workAddress: e.target.value} : null)} className="rounded-xl" />
+                    <Input value={currentLog?.workAddress || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, workAddress: e.target.value} : null)} className="rounded-xl" />
                   </div>
                 </div>
                 <Separator className="my-6" />
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <Label>Partida Activa</Label>
-                    <Input value={currentLog?.processItem} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, processItem: e.target.value} : null)} className="rounded-xl" placeholder="Ej: Fundaciones" />
+                    <Input value={currentLog?.processItem || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, processItem: e.target.value} : null)} className="rounded-xl" placeholder="Ej: Fundaciones" />
                   </div>
                   <div className="space-y-1">
                     <Label>% Avance Hoy</Label>
-                    <Input type="number" value={currentLog?.advancePercentage} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, advancePercentage: Number(e.target.value)} : null)} className="rounded-xl" />
+                    <Input type="number" value={currentLog?.advancePercentage ?? 0} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, advancePercentage: Number(e.target.value)} : null)} className="rounded-xl" />
                   </div>
                   <div className="space-y-1">
                     <Label>M2 Avance Partida</Label>
-                    <Input type="number" value={currentLog?.advanceM2} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, advanceM2: Number(e.target.value)} : null)} className="rounded-xl" />
+                    <Input type="number" value={currentLog?.advanceM2 ?? 0} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, advanceM2: Number(e.target.value)} : null)} className="rounded-xl" />
                   </div>
                 </div>
               </LogSection>
@@ -461,24 +494,24 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                         <TableRow key={a.id}>
                           <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
                           <TableCell>
-                            <Input value={a.description} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
+                            <Input value={a.description || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
                           </TableCell>
                           <TableCell>
-                            <Input value={a.unit} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'unit', e.target.value)} className="h-8 rounded-lg text-sm" />
+                            <Input value={a.unit || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'unit', e.target.value)} className="h-8 rounded-lg text-sm" />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" value={a.planned} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'planned', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
+                            <Input type="number" value={a.planned ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'planned', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" value={a.executedToday} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'executedToday', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right font-bold text-primary" />
+                            <Input type="number" value={a.executedToday ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'executedToday', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right font-bold text-primary" />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" value={a.accumulated} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'accumulated', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
+                            <Input type="number" value={a.accumulated ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'accumulated', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
                           </TableCell>
                           <TableCell>
                              <select 
                                disabled={!isEditing}
-                               value={a.status}
+                               value={a.status || 'en proceso'}
                                onChange={e => updateItem('activities', a.id, 'status', e.target.value)}
                                className="h-8 rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none"
                               >
@@ -545,25 +578,25 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                     <div className="grid grid-cols-3 gap-4">
                        <div className="space-y-1 text-center">
                          <Label className="text-[10px] uppercase text-neutral-400">Mañana</Label>
-                         <Input type="number" value={currentLog?.weather.morningTemp} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, morningTemp: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center font-bold" />
+                         <Input type="number" value={currentLog?.weather.morningTemp ?? 0} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, morningTemp: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center font-bold" />
                        </div>
                        <div className="space-y-1 text-center">
                          <Label className="text-[10px] uppercase text-neutral-400">Tarde</Label>
-                         <Input type="number" value={currentLog?.weather.afternoonTemp} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, afternoonTemp: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center font-bold" />
+                         <Input type="number" value={currentLog?.weather.afternoonTemp ?? 0} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, afternoonTemp: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center font-bold" />
                        </div>
                        <div className="space-y-1 text-center">
                          <Label className="text-[10px] uppercase text-neutral-400">Viento</Label>
-                         <Input type="number" value={currentLog?.weather.wind} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, wind: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center" />
+                         <Input type="number" value={currentLog?.weather.wind ?? 0} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, wind: Number(e.target.value)}} : null)} className="h-10 rounded-xl text-center" />
                        </div>
                     </div>
                     <div className="space-y-2">
                        <Label>Lluvia / Precipitación</Label>
-                       <Input value={currentLog?.weather.rain} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, rain: e.target.value}} : null)} className="rounded-xl" placeholder="Ninguna" />
+                       <Input value={currentLog?.weather.rain || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, weather: {...l.weather, rain: e.target.value}} : null)} className="rounded-xl" placeholder="Ninguna" />
                     </div>
                     <div className="flex items-center space-x-2 bg-neutral-50 p-4 rounded-2xl border border-neutral-100">
                       <Checkbox 
                         id="affected" 
-                        checked={currentLog?.weather.affectedWork} 
+                        checked={currentLog?.weather.affectedWork ?? false} 
                         disabled={!isEditing}
                         onCheckedChange={v => setCurrentLog(l => l ? {...l, weather: {...l.weather, affectedWork: !!v}} : null)}
                       />
@@ -581,22 +614,22 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                        <Card key={p.id} className="rounded-2xl border-neutral-100 shadow-none hover:bg-neutral-50 transition-colors">
                          <CardContent className="p-4 space-y-3">
                            <div className="flex justify-between gap-2">
-                              <Input placeholder="Nombre" value={p.name} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'name', e.target.value)} className="h-9 border-none bg-neutral-100/50 rounded-xl font-bold shadow-none" />
+                              <Input placeholder="Nombre" value={p.name || ''} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'name', e.target.value)} className="h-9 border-none bg-neutral-100/50 rounded-xl font-bold shadow-none" />
                               {isEditing && <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-400" onClick={() => removeItem('personnel', p.id)}><Trash2 size={12} /></Button>}
                            </div>
                            <div className="grid grid-cols-2 gap-2">
                               <div className="space-y-1">
                                 <Label className="text-[10px] text-neutral-400">Cargo</Label>
-                                <Input value={p.role} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'role', e.target.value)} className="h-8 rounded-lg text-xs" />
+                                <Input value={p.role || ''} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'role', e.target.value)} className="h-8 rounded-lg text-xs" />
                               </div>
                               <div className="flex gap-1">
                                 <div className="space-y-1">
                                   <Label className="text-[10px] text-neutral-400">Entrada</Label>
-                                  <Input value={p.arrivalTime} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'arrivalTime', e.target.value)} className="h-8 rounded-lg text-xs px-1" />
+                                  <Input value={p.arrivalTime || ''} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'arrivalTime', e.target.value)} className="h-8 rounded-lg text-xs px-1" />
                                 </div>
                                 <div className="space-y-1">
                                   <Label className="text-[10px] text-neutral-400">Salida</Label>
-                                  <Input value={p.departureTime} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'departureTime', e.target.value)} className="h-8 rounded-lg text-xs px-1" />
+                                  <Input value={p.departureTime || ''} disabled={!isEditing} onChange={e => updateItem('personnel', p.id, 'departureTime', e.target.value)} className="h-8 rounded-lg text-xs px-1" />
                                 </div>
                               </div>
                            </div>
@@ -610,19 +643,19 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                <LogSection title="Seguridad y SSO" icon={<HardHat />} isEditing={isEditing}>
                   <div className="space-y-4">
                      <div className="flex flex-col gap-3 p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm">
-                        <CheckItem label="Charla 5 min" checked={currentLog?.safety.morningTalk} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, morningTalk: v}} : null)} />
-                        <CheckItem label="EPP Completo" checked={currentLog?.safety.eppUsage} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, eppUsage: v}} : null)} />
-                        <CheckItem label="Revisión Asistencia" checked={currentLog?.safety.attendanceReview} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, attendanceReview: v}} : null)} />
-                        <CheckItem label="Coord. Segura" checked={currentLog?.safety.taskCoordination} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, taskCoordination: v}} : null)} />
-                        <CheckItem label="Orden y Limpieza" checked={currentLog?.safety.orderAndCleanliness} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, orderAndCleanliness: v}} : null)} />
+                        <CheckItem label="Charla 5 min" checked={currentLog?.safety.morningTalk ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, morningTalk: v}} : null)} />
+                        <CheckItem label="EPP Completo" checked={currentLog?.safety.eppUsage ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, eppUsage: v}} : null)} />
+                        <CheckItem label="Revisión Asistencia" checked={currentLog?.safety.attendanceReview ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, attendanceReview: v}} : null)} />
+                        <CheckItem label="Coord. Segura" checked={currentLog?.safety.taskCoordination ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, taskCoordination: v}} : null)} />
+                        <CheckItem label="Orden y Limpieza" checked={currentLog?.safety.orderAndCleanliness ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, orderAndCleanliness: v}} : null)} />
                      </div>
                      <div className="space-y-2">
                         <Label>Incidentes del día</Label>
-                        <Input value={currentLog?.safety.incidents} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, incidents: e.target.value}} : null)} className="rounded-xl" placeholder="Ninguno..." />
+                        <Input value={currentLog?.safety.incidents || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, incidents: e.target.value}} : null)} className="rounded-xl" placeholder="Ninguno..." />
                      </div>
                      <div className="space-y-2">
                         <Label>Observación SSO</Label>
-                        <Input value={currentLog?.safety.observations} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, observations: e.target.value}} : null)} className="rounded-xl" placeholder="..." />
+                        <Input value={currentLog?.safety.observations || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, observations: e.target.value}} : null)} className="rounded-xl" placeholder="..." />
                      </div>
                   </div>
                </LogSection>
@@ -651,11 +684,16 @@ function LogSection({
     <Card className="rounded-[2rem] border-neutral-200/50 shadow-sm overflow-hidden bg-white">
       <CardHeader className="border-b border-neutral-50 px-8 py-5">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-xl font-bold flex items-center gap-3">
-            <div className="p-2 bg-neutral-100 rounded-xl text-neutral-900">
-              {icon}
+          <CardTitle className="text-xl font-bold flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-neutral-100 rounded-xl text-neutral-900">
+                {icon}
+              </div>
+              {title}
             </div>
-            {title}
+            {title === "Información General" && (
+              <img src="/logo.png" alt="Logo" className="h-10 object-contain opacity-50" onError={(e) => e.currentTarget.style.display = 'none'} />
+            )}
           </CardTitle>
           {isEditing && onAdd && (
             <Button size="sm" variant="secondary" className="rounded-xl h-8 px-4" onClick={onAdd}>
@@ -675,7 +713,7 @@ function CheckItem({ label, checked, onChange, disabled }: { label: string; chec
   return (
     <div className="flex items-center justify-between group">
       <span className="text-sm font-medium text-neutral-600">{label}</span>
-      <Checkbox checked={checked} disabled={disabled} onCheckedChange={v => onChange(!!v)} className="rounded-md" />
+      <Checkbox checked={checked ?? false} disabled={disabled} onCheckedChange={v => onChange(!!v)} className="rounded-md" />
     </div>
   );
 }

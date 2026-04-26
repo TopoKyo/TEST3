@@ -14,7 +14,7 @@ import AttendanceHistory from './components/AttendanceHistory';
 import InventoryManagement from './components/InventoryManagement';
 import DailyLog from './components/DailyLog';
 import Dashboard from './components/Dashboard';
-import { User, AttendanceLog } from './types';
+import { User, AttendanceLog, InventoryMovement, WorkLog } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
 import { doc, getDocFromServer } from 'firebase/firestore';
@@ -29,8 +29,22 @@ export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
   const [users, setUsers] = useState<User[]>([]);
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
+  const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handleResize = () => {
+      const desktop = window.innerWidth >= 768;
+      setIsDesktop(desktop);
+      if (desktop) setIsMobileMenuOpen(false);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const menuItems = [
     { id: 'home', label: 'Inicio', icon: HomeIcon },
@@ -56,12 +70,16 @@ export default function App() {
     async function init() {
       try {
         await faceService.loadModels();
-        const [usersData, logsData] = await Promise.all([
+        const [usersData, logsData, movementsData, workLogsData] = await Promise.all([
           firestoreService.getAll<User>('users'),
-          firestoreService.getAll<AttendanceLog>('attendance')
+          firestoreService.getAll<AttendanceLog>('attendance'),
+          firestoreService.getAll<InventoryMovement>('inventoryMovements'),
+          firestoreService.getAll<WorkLog>('workLogs')
         ]);
         setUsers(usersData);
         setLogs(logsData);
+        setMovements(movementsData);
+        setWorkLogs(workLogsData);
       } catch (error) {
         console.error('Error initialization:', error);
         toast.error('Error al inicializar el sistema');
@@ -73,12 +91,16 @@ export default function App() {
   }, []);
 
   const refreshData = async () => {
-    const [usersData, logsData] = await Promise.all([
+    const [usersData, logsData, movementsData, workLogsData] = await Promise.all([
       firestoreService.getAll<User>('users'),
-      firestoreService.getAll<AttendanceLog>('attendance')
+      firestoreService.getAll<AttendanceLog>('attendance'),
+      firestoreService.getAll<InventoryMovement>('inventoryMovements'),
+      firestoreService.getAll<WorkLog>('workLogs')
     ]);
     setUsers(usersData);
     setLogs(logsData);
+    setMovements(movementsData);
+    setWorkLogs(workLogsData);
   };
 
   if (loading) {
@@ -101,27 +123,47 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'home': return <Dashboard onNavigate={(view) => setActiveView(view as View)} />;
+      case 'home': return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
       case 'scanner': return <Scanner users={users} onLogCreated={refreshData} />;
       case 'users': return <UserManagement users={users} onUpdate={refreshData} />;
       case 'history': return <AttendanceHistory logs={logs} users={users} onUpdate={refreshData} />;
       case 'inventory': return <InventoryManagement users={users} />;
       case 'worklogs': return <DailyLog users={users} attendanceLogs={logs} />;
-      default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} />;
+      default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
     }
   };
 
   return (
     <div className="flex h-screen bg-[#F8F9FA] overflow-hidden font-sans text-neutral-900">
+      {/* Mobile Sidebar Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsMobileMenuOpen(false)}
+            className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[60] md:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar Navigation */}
       <motion.aside 
         initial={false}
-        animate={{ width: isSidebarOpen ? 280 : 80 }}
-        className="h-full bg-white border-r border-neutral-200 flex flex-col z-50 relative shadow-sm"
+        animate={{ 
+          width: isSidebarOpen ? 280 : 80,
+          x: isDesktop ? 0 : (isMobileMenuOpen ? 0 : -280),
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className={cn(
+          "fixed inset-y-0 left-0 z-[70] md:relative h-full bg-white border-r border-neutral-200 flex flex-col shadow-xl md:shadow-sm",
+          (!isDesktop && !isMobileMenuOpen) && "pointer-events-none"
+        )}
       >
         <div className="p-6 mb-4 flex items-center justify-between">
           <AnimatePresence mode="wait">
-            {isSidebarOpen ? (
+            {(isSidebarOpen || isMobileMenuOpen) ? (
               <motion.div 
                 key="logo-full"
                 initial={{ opacity: 0, x: -10 }}
@@ -129,8 +171,8 @@ export default function App() {
                 exit={{ opacity: 0 }}
                 className="flex items-center gap-3"
               >
-                <div className="bg-primary p-2 rounded-xl text-white">
-                  <Mountain size={20} />
+                <div className="bg-primary/10 p-1 rounded-xl">
+                  <img src="/logo.png" alt="Vertical Solutions" className="w-8 h-8 object-contain" onError={(e) => e.currentTarget.src = 'https://placehold.co/40x40?text=VS'} />
                 </div>
                 <span className="font-bold text-lg tracking-tight whitespace-nowrap">Vertical App</span>
               </motion.div>
@@ -139,9 +181,9 @@ export default function App() {
                 key="logo-mini"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="bg-primary p-2 rounded-xl text-white mx-auto"
+                className="mx-auto"
               >
-                <Mountain size={20} />
+                <img src="/logo.png" alt="VS" className="w-10 h-10 object-contain" onError={(e) => e.currentTarget.src = 'https://placehold.co/40x40?text=VS'} />
               </motion.div>
             )}
           </AnimatePresence>
@@ -154,7 +196,10 @@ export default function App() {
             return (
               <button
                 key={item.id}
-                onClick={() => setActiveView(item.id as View)}
+                onClick={() => {
+                  setActiveView(item.id as View);
+                  setIsMobileMenuOpen(false);
+                }}
                 className={cn(
                   "w-full flex items-center gap-3 p-3 rounded-2xl transition-all duration-200 group relative",
                   isActive 
@@ -163,12 +208,12 @@ export default function App() {
                 )}
               >
                 <Icon size={22} strokeWidth={isActive ? 2.5 : 2} />
-                {isSidebarOpen && (
+                {(isSidebarOpen || isMobileMenuOpen) && (
                   <span className={cn("font-medium", isActive ? "font-bold" : "")}>
                     {item.label}
                   </span>
                 )}
-                {!isSidebarOpen && (
+                {(!isSidebarOpen && !isMobileMenuOpen) && (
                   <div className="absolute left-full ml-4 px-2 py-1 bg-neutral-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity font-medium z-[100] whitespace-nowrap">
                     {item.label}
                   </div>
@@ -178,7 +223,7 @@ export default function App() {
           })}
         </nav>
 
-        <div className="p-4 mt-auto border-t border-neutral-100">
+        <div className="p-4 mt-auto border-t border-neutral-100 hidden md:block">
           <Button 
             variant="ghost" 
             size="sm" 
@@ -191,9 +236,12 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200 px-8 py-4 flex items-center justify-between">
-          <div>
+      <main className="flex-1 overflow-y-auto relative w-full">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200 px-6 md:px-8 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="outline" size="icon" className="rounded-xl flex md:hidden h-10 w-10 shrink-0" onClick={() => setIsMobileMenuOpen(true)}>
+              <Menu size={20} />
+            </Button>
             <h2 className="text-sm font-bold uppercase tracking-widest text-neutral-400">
               {menuItems.find(i => i.id === activeView)?.label}
             </h2>
@@ -203,9 +251,6 @@ export default function App() {
                 <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                 <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">Sistema Activo</span>
              </div>
-             <Button variant="outline" size="icon" className="rounded-full md:hidden" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
-                <Menu size={18} />
-             </Button>
           </div>
         </header>
 

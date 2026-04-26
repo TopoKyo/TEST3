@@ -191,7 +191,7 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
                     <Input 
                       id="id" 
                       placeholder="Ej: 12345" 
-                      value={formData.id}
+                      value={formData.id || ''}
                       onChange={e => setFormData({ ...formData, id: e.target.value })}
                       disabled={!!editingUser}
                       className="rounded-xl"
@@ -202,7 +202,7 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
                     <Input 
                       id="name" 
                       placeholder="Ej: Juan Pérez" 
-                      value={formData.name}
+                      value={formData.name || ''}
                       onChange={e => setFormData({ ...formData, name: e.target.value })}
                       className="rounded-xl"
                     />
