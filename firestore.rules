@@ -30,5 +30,13 @@ service cloud.firestore {
     match /workLogs/{logId} {
       allow read, write: if true;
     }
+
+    match /wishlist/{itemId} {
+      allow read, write: if true;
+    }
+
+    match /settings/{settingId} {
+      allow read, write: if true;
+    }
   }
 }

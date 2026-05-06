@@ -143,7 +143,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
             autoPlay
             muted
             playsInline
-            className="w-full h-full object-cover grayscale-[0.5]"
+            className="w-full h-full object-cover grayscale-[0.5] -scale-x-100"
           />
           <div className="absolute inset-0 pointer-events-none border-[20px] border-black/20 flex items-center justify-center">
              <div className="w-64 h-64 border-2 border-primary/50 rounded-full border-dashed animate-[spin_10s_linear_infinite]"></div>

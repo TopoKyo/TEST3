@@ -26,7 +26,8 @@ import {
   Printer,
   History,
   Info,
-  Pencil
+  Pencil,
+  FileBarChart
 } from 'lucide-react';
 import { 
   WorkLog, 
@@ -46,6 +47,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
+import ConsolidatedReportDialog from './ConsolidatedReportDialog';
 
 interface DailyLogProps {
   users: User[];
@@ -215,6 +217,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       (items as ProblemEntry[]).push({
         id: Math.random().toString(36).substr(2, 5),
         number: items.length + 1,
+        date: currentLog.date,
         description: '',
         impact: 'Medio',
         correctiveAction: '',
@@ -273,25 +276,26 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     // Add Logo
     try {
       const logoData = await getBase64ImageFromURL('/logo.png');
-      doc.addImage(logoData, 'PNG', 15, 10, 25, 25);
+      // Adjusted size (40x20) and positioning (15, 12)
+      doc.addImage(logoData, 'PNG', 15, 12, 40, 20);
     } catch (e) {
       console.warn('Logo could not be loaded for PDF', e);
     }
 
-    // Header
+    // Header - Adjusted vertical alignment
     doc.setFontSize(22);
     doc.setTextColor(40, 40, 40);
-    doc.text('BITÁCORA DIARIA DE OBRA', 110, 22, { align: 'center' });
+    doc.text('BITÁCORA DIARIA DE OBRA', 110, 24, { align: 'center' });
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text(`Informe N°: ${currentLog.reportNumber} | Fecha: ${currentLog.date} (${currentLog.dayOfWeek})`, 110, 29, { align: 'center' });
+    doc.text(`Informe N°: ${currentLog.reportNumber} | Fecha: ${currentLog.date} (${currentLog.dayOfWeek})`, 110, 31, { align: 'center' });
     
     doc.setDrawColor(200, 200, 200);
-    doc.line(15, 38, 195, 38);
+    doc.line(15, 42, 195, 42);
 
-    // General Info Table
+    // General Info Table - Pushed down slightly (48)
     autoTable(doc, {
-      startY: 45,
+      startY: 48,
       head: [['DATOS GENERALES DEL PROYECTO', '']],
       body: [
         ['Proyecto:', currentLog.project],
@@ -350,6 +354,28 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       theme: 'grid'
     });
 
+    // Problems and Deviations
+    const problemBody = currentLog.problems.length > 0 
+      ? currentLog.problems.map(p => [p.date, p.description, p.impact, p.correctiveAction])
+      : [['-', 'Sin incidencias registradas', '-', '-']];
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [
+        [{ content: 'PROBLEMAS Y DESVIACIONES', colSpan: 4, styles: { halign: 'center', fillColor: [153, 27, 27] } }],
+        ['FECHA', 'DESCRIPCIÓN DEL PROBLEMA', 'IMPACTO', 'ACCIÓN TOMADA']
+      ],
+      body: problemBody,
+      theme: 'grid',
+      headStyles: { fillColor: [180, 180, 180], textColor: [20, 20, 20], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 25 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 50 },
+      }
+    });
+    
     doc.save(`Bitacora_${currentLog.date}.pdf`);
   };
 
@@ -415,6 +441,11 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
               <span className="text-sm font-medium">Informe N° {currentLog?.reportNumber}</span>
             </div>
             <div className="flex items-center gap-2">
+              <ConsolidatedReportDialog workLogs={logs} trigger={
+                <Button variant="outline" className="rounded-xl border-primary text-primary hover:bg-primary/5">
+                  <FileBarChart className="mr-2 h-4 w-4" /> Informe Consolidado
+                </Button>
+              } />
               <Button variant="outline" className="rounded-xl" onClick={exportPDF}>
                 <Printer className="mr-2 h-4 w-4" /> PDF
               </Button>
@@ -542,14 +573,40 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                          <Card key={p.id} className="rounded-2xl border-neutral-100 shadow-none bg-neutral-50/50">
                            <CardContent className="p-4 space-y-3">
                              <div className="flex justify-between items-center">
-                               <Badge variant="outline">Item {p.number}</Badge>
+                               <div className="flex items-center gap-2">
+                                 <Badge variant="outline">Item {p.number}</Badge>
+                                 <Input 
+                                   type="date" 
+                                   value={p.date} 
+                                   disabled={!isEditing} 
+                                   onChange={e => updateItem('problems', p.id, 'date', e.target.value)} 
+                                   className="h-7 w-32 rounded-lg text-[10px] py-0 px-2" 
+                                 />
+                               </div>
                                {isEditing && <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-500" onClick={() => removeItem('problems', p.id)}><Trash2 size={12} /></Button>}
                              </div>
                              <Input placeholder="Descripción del problema" value={p.description} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'description', e.target.value)} className="h-9 rounded-xl text-sm" />
                              <div className="grid grid-cols-2 gap-2">
-                                <Input placeholder="Acción correctiva" value={p.correctiveAction} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'correctiveAction', e.target.value)} className="h-9 rounded-xl text-xs" />
-                                <Input placeholder="Responsable" value={p.responsible} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'responsible', e.target.value)} className="h-9 rounded-xl text-xs" />
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-neutral-400">Impacto</Label>
+                                  <select 
+                                    className="w-full h-9 rounded-xl text-xs border border-neutral-200 px-2 bg-white disabled:bg-neutral-50"
+                                    value={p.impact}
+                                    disabled={!isEditing}
+                                    onChange={e => updateItem('problems', p.id, 'impact', e.target.value)}
+                                  >
+                                    <option value="Bajo">Bajo</option>
+                                    <option value="Medio">Medio</option>
+                                    <option value="Alto">Alto</option>
+                                    <option value="Crítico">Crítico</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <Label className="text-[10px] text-neutral-400">Acción Tomada</Label>
+                                  <Input placeholder="Acción correctiva" value={p.correctiveAction} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'correctiveAction', e.target.value)} className="h-9 rounded-xl text-xs" />
+                                </div>
                              </div>
+                             <Input placeholder="Responsable" value={p.responsible} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'responsible', e.target.value)} className="h-9 rounded-xl text-xs" />
                            </CardContent>
                          </Card>
                        ))}

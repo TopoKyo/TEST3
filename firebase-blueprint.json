@@ -83,6 +83,36 @@
         "photos": { "type": "array", "items": { "type": "string" } }
       },
       "required": ["id", "date", "reportNumber", "project", "client"]
+    },
+    "WishListItem": {
+      "title": "WishListItem",
+      "description": "Daily needs and items for the following day.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "item": { "type": "string" },
+        "category": { "type": "string", "enum": ["material", "herramienta", "tarea", "otro"] },
+        "targetDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["pendiente", "listo"] },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "item", "category", "targetDate", "status", "createdAt", "createdBy"]
+    },
+    "ProjectContext": {
+      "title": "ProjectContext",
+      "description": "Global project information for report analysis.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "technicalSpecs": { "type": "string" },
+        "objectives": { "type": "string" },
+        "generalDescription": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name"]
     }
   },
   "firestore": {
@@ -105,6 +135,14 @@
     "workLogs": {
       "schema": "WorkLog",
       "description": "Collection of daily work reports."
+    },
+    "wishlist": {
+      "schema": "WishListItem",
+      "description": "Collection of daily needs/wishlist items."
+    },
+    "settings": {
+      "schema": "ProjectContext",
+      "description": "Global application and project settings."
     }
   }
 }

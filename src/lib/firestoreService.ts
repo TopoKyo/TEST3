@@ -110,5 +110,14 @@ export const firestoreService = {
       handleFirestoreError(error, OperationType.DELETE, `${collectionPath}/${id}`);
       throw error;
     }
+  },
+
+  async getProjectContext(): Promise<any | null> {
+    const context = await firestoreService.getOne<any>('settings', 'projectContext');
+    return context;
+  },
+
+  async saveProjectContext(data: any): Promise<void> {
+    await this.add('settings', { ...data, id: 'projectContext', updatedAt: new Date().toISOString() });
   }
 };

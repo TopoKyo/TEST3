@@ -109,6 +109,7 @@ export interface SafetyChecklist {
 export interface ProblemEntry {
   id: string;
   number: number;
+  date: string;
   description: string;
   impact: string;
   correctiveAction: string;
@@ -120,4 +121,24 @@ export interface PlanEntry {
   number: number;
   activity: string;
   responsible: string;
+}
+
+export interface WishListItem {
+  id: string;
+  item: string;
+  category: 'material' | 'herramienta' | 'tarea' | 'otro';
+  targetDate: string;
+  status: 'pendiente' | 'listo';
+  notes?: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface ProjectContext {
+  id: string;
+  name: string;
+  technicalSpecs: string;
+  objectives: string;
+  generalDescription: string;
+  updatedAt: string;
 }

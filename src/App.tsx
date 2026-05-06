@@ -7,14 +7,15 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu } from 'lucide-react';
+import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles } from 'lucide-react';
 import Scanner from './components/Scanner';
 import UserManagement from './components/UserManagement';
 import AttendanceHistory from './components/AttendanceHistory';
 import InventoryManagement from './components/InventoryManagement';
 import DailyLog from './components/DailyLog';
 import Dashboard from './components/Dashboard';
-import { User, AttendanceLog, InventoryMovement, WorkLog } from './types';
+import WishList from './components/WishList';
+import { User, AttendanceLog, InventoryMovement, WorkLog, WishListItem } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
 import { doc, getDocFromServer } from 'firebase/firestore';
@@ -23,7 +24,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -31,6 +32,7 @@ export default function App() {
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [workLogs, setWorkLogs] = useState<WorkLog[]>([]);
+  const [wishlistItems, setWishlistItems] = useState<WishListItem[]>([]);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
@@ -52,6 +54,7 @@ export default function App() {
     { id: 'users', label: 'Personal', icon: Users },
     { id: 'history', label: 'Asistencia', icon: FileBarChart },
     { id: 'inventory', label: 'Inventario', icon: Package },
+    { id: 'wishlist', label: 'Pendientes', icon: Sparkles },
     { id: 'worklogs', label: 'Bitácora de Obra', icon: ClipboardList },
   ];
 
@@ -70,16 +73,18 @@ export default function App() {
     async function init() {
       try {
         await faceService.loadModels();
-        const [usersData, logsData, movementsData, workLogsData] = await Promise.all([
+        const [usersData, logsData, movementsData, workLogsData, wishlistData] = await Promise.all([
           firestoreService.getAll<User>('users'),
           firestoreService.getAll<AttendanceLog>('attendance'),
           firestoreService.getAll<InventoryMovement>('inventoryMovements'),
-          firestoreService.getAll<WorkLog>('workLogs')
+          firestoreService.getAll<WorkLog>('workLogs'),
+          firestoreService.getAll<WishListItem>('wishlist')
         ]);
         setUsers(usersData);
         setLogs(logsData);
         setMovements(movementsData);
         setWorkLogs(workLogsData);
+        setWishlistItems(wishlistData);
       } catch (error) {
         console.error('Error initialization:', error);
         toast.error('Error al inicializar el sistema');
@@ -91,16 +96,18 @@ export default function App() {
   }, []);
 
   const refreshData = async () => {
-    const [usersData, logsData, movementsData, workLogsData] = await Promise.all([
+    const [usersData, logsData, movementsData, workLogsData, wishlistData] = await Promise.all([
       firestoreService.getAll<User>('users'),
       firestoreService.getAll<AttendanceLog>('attendance'),
       firestoreService.getAll<InventoryMovement>('inventoryMovements'),
-      firestoreService.getAll<WorkLog>('workLogs')
+      firestoreService.getAll<WorkLog>('workLogs'),
+      firestoreService.getAll<WishListItem>('wishlist')
     ]);
     setUsers(usersData);
     setLogs(logsData);
     setMovements(movementsData);
     setWorkLogs(workLogsData);
+    setWishlistItems(wishlistData);
   };
 
   if (loading) {
@@ -123,12 +130,13 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case 'home': return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
+      case 'home': return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} wishlistItems={wishlistItems} />;
       case 'scanner': return <Scanner users={users} onLogCreated={refreshData} />;
       case 'users': return <UserManagement users={users} onUpdate={refreshData} />;
       case 'history': return <AttendanceHistory logs={logs} users={users} onUpdate={refreshData} />;
-      case 'inventory': return <InventoryManagement users={users} />;
+      case 'inventory': return <InventoryManagement users={users} onUpdate={refreshData} />;
       case 'worklogs': return <DailyLog users={users} attendanceLogs={logs} />;
+      case 'wishlist': return <WishList users={users} />;
       default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
     }
   };

@@ -40,9 +40,10 @@ import { Progress } from '@/components/ui/progress';
 
 interface InventoryManagementProps {
   users: User[];
+  onUpdate?: () => void;
 }
 
-export default function InventoryManagement({ users }: InventoryManagementProps) {
+export default function InventoryManagement({ users, onUpdate }: InventoryManagementProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [loading, setLoading] = useState(true);
@@ -604,15 +605,18 @@ export default function InventoryManagement({ users }: InventoryManagementProps)
                     <span className="hidden sm:inline">Exportar</span>
                   </Button>
                   <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-                    <DialogTrigger render={
-                      <Button className="h-11 rounded-2xl gap-2 shadow-md" onClick={() => {
-                        setEditingProduct(null);
-                        setProductForm({ id: '', name: '', unit: 'unidad', lowStockThreshold: 5, category: '', description: '' });
-                      }}>
-                        <Plus size={18} />
-                        Nuevo
-                      </Button>
-                    } />
+                    <DialogTrigger
+                      nativeButton={false}
+                      render={
+                        <Button className="h-11 rounded-2xl gap-2 shadow-md" onClick={() => {
+                          setEditingProduct(null);
+                          setProductForm({ id: '', name: '', unit: 'unidad', lowStockThreshold: 5, category: '', description: '' });
+                        }}>
+                          <Plus size={18} />
+                          Nuevo
+                        </Button>
+                      }
+                    />
                     <DialogContent className="rounded-3xl p-8 max-w-lg">
                       <DialogHeader className="mb-6 px-0 text-left">
                         <DialogTitle className="text-2xl font-bold tracking-tight">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</DialogTitle>

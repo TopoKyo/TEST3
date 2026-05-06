@@ -1,3 +1,4 @@
+import React from 'react';
 import { motion } from 'motion/react';
 import { 
   Camera, 
@@ -12,22 +13,26 @@ import {
   Mountain,
   History,
   FileText,
-  Clock
+  Clock,
+  AlertCircle,
+  Sparkles as SparklesIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { InventoryMovement, WorkLog } from '@/src/types';
+import { InventoryMovement, WorkLog, WishListItem } from '@/src/types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import ConsolidatedReportDialog from './ConsolidatedReportDialog';
 
 interface DashboardProps {
   onNavigate: (view: string) => void;
   movements: InventoryMovement[];
   workLogs: WorkLog[];
+  wishlistItems?: WishListItem[];
 }
 
-export default function Dashboard({ onNavigate, movements, workLogs }: DashboardProps) {
+export default function Dashboard({ onNavigate, movements, workLogs, wishlistItems = [] }: DashboardProps) {
   const quickActions = [
     { 
       id: 'scanner', 
@@ -38,6 +43,14 @@ export default function Dashboard({ onNavigate, movements, workLogs }: Dashboard
       textColor: 'text-indigo-500' 
     },
     { 
+      id: 'wishlist', 
+      label: 'Pendientes', 
+      description: 'Cosas que faltan para el día siguiente',
+      icon: AlertCircle, 
+      color: 'bg-rose-500', 
+      textColor: 'text-rose-500' 
+    },
+    { 
       id: 'worklogs', 
       label: 'Nueva Bitácora', 
       description: 'Crear reporte diario de obra y avances',
@@ -46,12 +59,13 @@ export default function Dashboard({ onNavigate, movements, workLogs }: Dashboard
       textColor: 'text-emerald-500' 
     },
     { 
-      id: 'inventory', 
-      label: 'Control de Stock', 
-      description: 'Gestionar entradas y salidas de materiales',
-      icon: Package, 
-      color: 'bg-orange-500', 
-      textColor: 'text-orange-500' 
+      id: 'report', 
+      label: 'Reporte Consolidado', 
+      description: 'Análisis inteligente del avance semanal/mensual',
+      icon: SparklesIcon, 
+      color: 'bg-primary', 
+      textColor: 'text-primary',
+      custom: true
     },
   ];
 
@@ -186,36 +200,60 @@ export default function Dashboard({ onNavigate, movements, workLogs }: Dashboard
         </Card>
       </div>
 
-      {/* Quick Access Tiles */}
       <div className="space-y-6">
         <h3 className="text-xl font-bold tracking-tight text-neutral-900 px-2">Acciones Rápidas</h3>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {quickActions.map((action, i) => (
-            <motion.button
-              key={action.id}
-              whileHover={{ y: -5 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => onNavigate(action.id)}
-              className="text-left group"
-            >
-              <Card className="rounded-[2.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden bg-white h-full">
-                <CardContent className="p-10 flex flex-col h-full">
-                  <div className={cn("p-6 rounded-[2rem] text-white w-fit mb-8 shadow-lg", action.color)}>
-                    <action.icon size={40} />
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {quickActions.map((action, i) => {
+            const content = (
+              <Card className="rounded-[2.5rem] border-none shadow-xl hover:shadow-2xl transition-all duration-300 overflow-hidden bg-white h-full cursor-pointer">
+                <CardContent className="p-8 flex flex-col h-full">
+                  <div className={cn("p-5 rounded-[1.5rem] text-white w-fit mb-6 shadow-lg", action.color)}>
+                    <action.icon size={32} />
                   </div>
-                  <h4 className="text-2xl font-black tracking-tight text-neutral-900 group-hover:text-primary transition-colors">
+                  <h4 className="text-xl font-black tracking-tight text-neutral-900 group-hover:text-primary transition-colors">
                     {action.label}
                   </h4>
-                  <p className="text-neutral-500 font-medium mt-3 flex-1">
+                  <p className="text-neutral-500 text-sm font-medium mt-2 flex-1">
                     {action.description}
                   </p>
-                  <div className="mt-8 flex items-center gap-2 text-primary font-bold text-sm uppercase tracking-widest">
-                    Comenzar <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-6 flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest">
+                    Comenzar <ArrowRight size={14} className="group-hover:translate-x-1 transition-transform" />
                   </div>
                 </CardContent>
               </Card>
-            </motion.button>
-          ))}
+            );
+
+            if (action.custom && action.id === 'report') {
+              return (
+                <React.Fragment key={action.id}>
+                  <ConsolidatedReportDialog 
+                    workLogs={workLogs} 
+                    trigger={
+                      <motion.div
+                        whileHover={{ y: -5 }}
+                        whileTap={{ scale: 0.98 }}
+                        className="text-left group h-full"
+                      >
+                        {content}
+                      </motion.div>
+                    }
+                  />
+                </React.Fragment>
+              );
+            }
+
+            return (
+              <motion.button
+                key={action.id}
+                whileHover={{ y: -5 }}
+                whileTap={{ scale: 0.98 }}
+                onClick={() => onNavigate(action.id)}
+                className="text-left group"
+              >
+                {content}
+              </motion.button>
+            );
+          })}
         </div>
       </div>
       
