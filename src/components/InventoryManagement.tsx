@@ -606,15 +606,18 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                   </Button>
                   <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
                     <DialogTrigger
-                      nativeButton={false}
+                      nativeButton={true}
                       render={
-                        <Button className="h-11 rounded-2xl gap-2 shadow-md" onClick={() => {
-                          setEditingProduct(null);
-                          setProductForm({ id: '', name: '', unit: 'unidad', lowStockThreshold: 5, category: '', description: '' });
-                        }}>
+                        <button 
+                          className="inline-flex items-center justify-center rounded-2xl h-11 px-4 gap-2 bg-neutral-900 text-white hover:bg-neutral-800 shadow-md font-medium transition-all active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-primary/20"
+                          onClick={() => {
+                            setEditingProduct(null);
+                            setProductForm({ id: '', name: '', unit: 'unidad', lowStockThreshold: 5, category: '', description: '' });
+                          }}
+                        >
                           <Plus size={18} />
                           Nuevo
-                        </Button>
+                        </button>
                       }
                     />
                     <DialogContent className="rounded-3xl p-8 max-w-lg">

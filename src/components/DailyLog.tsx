@@ -30,8 +30,17 @@ import {
   FileBarChart,
   Camera,
   Image as ImageIcon,
-  X
+  X,
+  Upload,
+  RefreshCw
 } from 'lucide-react';
+import { 
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { 
   WorkLog, 
   User, 
@@ -98,6 +107,62 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [currentLog, setCurrentLog] = useState<WorkLog | null>(null);
   const [loading, setLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
+  const [stream, setStream] = useState<MediaStream | null>(null);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (!cameraOpen) {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        setStream(null);
+      }
+    }
+  }, [cameraOpen]);
+
+  const startCamera = async (mode: 'user' | 'environment') => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: mode } 
+      });
+      setStream(newStream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = newStream;
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      toast.error("No se pudo acceder a la cámara. Revisa los permisos.");
+      setCameraOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (cameraOpen) {
+      startCamera(facingMode);
+    }
+  }, [cameraOpen, facingMode]);
+
+  const toggleCamera = () => {
+    setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && activeActivityId) {
+      const canvas = document.createElement('canvas');
+      canvas.width = videoRef.current.videoWidth;
+      canvas.height = videoRef.current.videoHeight;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(videoRef.current, 0, 0);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+      updateItem('activities', activeActivityId, 'image', dataUrl);
+      setCameraOpen(false);
+    }
+  };
 
   useEffect(() => {
     fetchLogs();
@@ -596,12 +661,12 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                   <img 
                                     src={a.image} 
                                     alt="Activity" 
-                                    className="h-8 w-8 rounded object-cover cursor-pointer hover:opacity-80 border border-neutral-200"
+                                    className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
                                     onClick={() => window.open(a.image, '_blank')}
                                   />
                                   {isEditing && (
                                     <button 
-                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
                                       onClick={() => updateItem('activities', a.id, 'image', null)}
                                     >
                                       <X size={10} />
@@ -610,23 +675,38 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                 </div>
                               ) : (
                                 isEditing && (
-                                  <div className="relative">
-                                    <input
-                                      type="file"
-                                      accept="image/*"
-                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) handleActivityImage(a.id, file);
+                                  <div className="flex items-center gap-1">
+                                    <div className="relative group/upload">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleActivityImage(a.id, file);
+                                        }}
+                                        title="Subir Archivo"
+                                      />
+                                      <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all">
+                                        <Upload size={16} />
+                                      </Button>
+                                    </div>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all"
+                                      onClick={() => {
+                                        setActiveActivityId(a.id);
+                                        setCameraOpen(true);
                                       }}
-                                    />
-                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-400 hover:text-primary">
-                                      <Camera size={14} />
+                                      title="Tomar Foto"
+                                    >
+                                      <Camera size={16} />
                                     </Button>
                                   </div>
                                 )
                               )}
-                              {!isEditing && !a.image && <span className="text-xs text-neutral-300">-</span>}
+                              {!isEditing && !a.image && <span className="text-xs text-neutral-300 italic">Sin foto</span>}
                             </div>
                           </TableCell>
                           {isEditing && (
@@ -798,6 +878,68 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
           </div>
         </div>
       )}
+
+      <Dialog open={cameraOpen} onOpenChange={setCameraOpen}>
+        <DialogContent className="sm:max-w-md rounded-3xl overflow-hidden border-none shadow-2xl">
+          <DialogHeader className="p-6 pb-2">
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <Camera className="text-primary" />
+              Capturar Evidencia
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative bg-black aspect-[4/3] flex items-center justify-center overflow-hidden mx-4 rounded-2xl group">
+            {stream ? (
+              <>
+                <video 
+                  ref={videoRef} 
+                  autoPlay 
+                  playsInline 
+                  className={cn(
+                    "w-full h-full object-cover",
+                    facingMode === 'user' && "-scale-x-100"
+                  )}
+                />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="absolute top-4 right-4 rounded-full bg-black/40 border-white/20 text-white hover:bg-black/60 backdrop-blur-md"
+                  onClick={toggleCamera}
+                  title="Cambiar Cámara"
+                >
+                  <RefreshCw size={18} className={cn("transition-transform duration-500", facingMode === 'user' && "rotate-180")} />
+                </Button>
+                <div className="absolute inset-0 pointer-events-none border-2 border-white/20 rounded-2xl"></div>
+              </>
+            ) : (
+              <div className="text-white flex flex-col items-center gap-4">
+                <div className="p-4 bg-primary/20 rounded-full animate-pulse">
+                  <RefreshCw size={32} className="animate-spin text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="font-bold">Iniciando cámara...</p>
+                  <p className="text-xs text-neutral-500 mt-1">Usando cámara {facingMode === 'environment' ? 'trasera' : 'frontal'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+          <DialogFooter className="flex-row gap-3 p-6 mt-0">
+            <Button 
+              variant="ghost" 
+              className="rounded-2xl flex-1 h-12 text-neutral-500 font-medium" 
+              onClick={() => setCameraOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              className="rounded-2xl flex-1 h-12 text-lg font-bold bg-neutral-900 shadow-xl shadow-neutral-200" 
+              onClick={capturePhoto} 
+              disabled={!stream}
+            >
+              Tomar Foto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

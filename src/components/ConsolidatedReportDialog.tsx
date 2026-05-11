@@ -314,10 +314,10 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
         nativeButton={true}
         render={
           trigger || (
-            <Button className="rounded-2xl gap-2 bg-neutral-900 text-white hover:bg-neutral-800 shadow-lg">
+            <button className="inline-flex items-center justify-center rounded-2xl gap-2 bg-neutral-900 text-white hover:bg-neutral-800 shadow-lg px-6 py-3 font-medium transition-all active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
               <FileBarChart size={20} />
               <span>Generar Informe de Avance</span>
-            </Button>
+            </button>
           )
         }
       />

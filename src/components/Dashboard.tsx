@@ -229,13 +229,13 @@ export default function Dashboard({ onNavigate, movements, workLogs, wishlistIte
                   <ConsolidatedReportDialog 
                     workLogs={workLogs} 
                     trigger={
-                      <motion.div
+                      <motion.button
                         whileHover={{ y: -5 }}
                         whileTap={{ scale: 0.98 }}
-                        className="text-left group h-full"
+                        className="text-left group h-full w-full"
                       >
                         {content}
-                      </motion.div>
+                      </motion.button>
                     }
                   />
                 </React.Fragment>

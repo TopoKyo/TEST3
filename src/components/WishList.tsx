@@ -158,10 +158,10 @@ export default function WishList({ users }: WishListProps) {
           <DialogTrigger
             nativeButton={true}
             render={
-              <Button className="rounded-2xl h-14 px-8 bg-neutral-900 text-white hover:bg-neutral-800 shadow-xl shadow-neutral-200 gap-2">
+              <button className="inline-flex items-center justify-center rounded-2xl h-14 px-8 bg-neutral-900 text-white hover:bg-neutral-800 shadow-xl shadow-neutral-200 gap-2 font-medium transition-all active:scale-95 outline-none focus-visible:ring-2 focus-visible:ring-primary/20">
                 <Plus size={20} />
                 <span>Nuevo Pendiente</span>
-              </Button>
+              </button>
             }
           />
           <DialogContent className="rounded-[2rem] sm:max-w-[425px]">
