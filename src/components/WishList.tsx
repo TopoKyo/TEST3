@@ -156,7 +156,7 @@ export default function WishList({ users }: WishListProps) {
         
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger
-            nativeButton={false}
+            nativeButton={true}
             render={
               <Button className="rounded-2xl h-14 px-8 bg-neutral-900 text-white hover:bg-neutral-800 shadow-xl shadow-neutral-200 gap-2">
                 <Plus size={20} />

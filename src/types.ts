@@ -92,6 +92,7 @@ export interface ActivityEntry {
   executedToday: number;
   accumulated: number;
   status: 'pendiente' | 'en proceso' | 'listo';
+  image?: string;
 }
 
 export interface SafetyChecklist {

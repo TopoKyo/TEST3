@@ -311,7 +311,7 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger
-        nativeButton={false}
+        nativeButton={true}
         render={
           trigger || (
             <Button className="rounded-2xl gap-2 bg-neutral-900 text-white hover:bg-neutral-800 shadow-lg">

@@ -27,7 +27,10 @@ import {
   History,
   Info,
   Pencil,
-  FileBarChart
+  FileBarChart,
+  Camera,
+  Image as ImageIcon,
+  X
 } from 'lucide-react';
 import { 
   WorkLog, 
@@ -249,6 +252,14 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     setCurrentLog({ ...currentLog, [section]: items });
   };
 
+  const handleActivityImage = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      updateItem('activities', id, 'image', reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const getBase64ImageFromURL = (url: string) => {
     return new Promise<string>((resolve, reject) => {
       const img = new Image();
@@ -339,6 +350,32 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       body: currentLog.activities.map(a => [a.item, a.description, a.unit, a.planned, a.executedToday, a.accumulated, a.status.toUpperCase()]),
       theme: 'grid'
     });
+
+    // Activity Images Section
+    const activitiesWithImages = currentLog.activities.filter(a => a.image);
+    if (activitiesWithImages.length > 0) {
+      doc.addPage();
+      doc.setFontSize(16);
+      doc.text('EVIDENCIA FOTOGRÁFICA DE ACTIVIDADES', 15, 20);
+      
+      let yPos = 30;
+      activitiesWithImages.forEach((a, index) => {
+        if (yPos > 240) {
+          doc.addPage();
+          yPos = 20;
+        }
+        
+        doc.setFontSize(10);
+        doc.text(`Actividad ${a.item}: ${a.description}`, 15, yPos);
+        try {
+          doc.addImage(a.image!, 'JPEG', 15, yPos + 2, 80, 60);
+          yPos += 70;
+        } catch (e) {
+          console.error('Error adding image to PDF', e);
+          yPos += 10;
+        }
+      });
+    }
 
     // Safety
     autoTable(doc, {
@@ -517,6 +554,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                         <TableHead className="w-[100px] text-right">Hoy</TableHead>
                         <TableHead className="w-[100px] text-right">Acum.</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead className="w-[80px]">Foto</TableHead>
                         {isEditing && <TableHead className="w-[50px]"></TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -550,6 +588,46 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                <option value="en proceso">En proceso</option>
                                <option value="listo">Listo</option>
                              </select>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {a.image ? (
+                                <div className="relative group/img">
+                                  <img 
+                                    src={a.image} 
+                                    alt="Activity" 
+                                    className="h-8 w-8 rounded object-cover cursor-pointer hover:opacity-80 border border-neutral-200"
+                                    onClick={() => window.open(a.image, '_blank')}
+                                  />
+                                  {isEditing && (
+                                    <button 
+                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity"
+                                      onClick={() => updateItem('activities', a.id, 'image', null)}
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                isEditing && (
+                                  <div className="relative">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleActivityImage(a.id, file);
+                                      }}
+                                    />
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-400 hover:text-primary">
+                                      <Camera size={14} />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              {!isEditing && !a.image && <span className="text-xs text-neutral-300">-</span>}
+                            </div>
                           </TableCell>
                           {isEditing && (
                             <TableCell>
