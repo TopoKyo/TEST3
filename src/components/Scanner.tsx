@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight } from 'lucide-react';
+import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight, RefreshCcw } from 'lucide-react';
 import { User, AttendanceType, ATTENDANCE_LABELS, AttendanceLog } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
 import { firestoreService } from '@/src/lib/firestoreService';
@@ -23,6 +23,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
   const [isScanning, setIsScanning] = useState(true);
   const [lastLogType, setLastLogType] = useState<AttendanceType | null>(null);
   const [loading, setLoading] = useState(false);
+  const [restartKey, setRestartKey] = useState(0);
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -89,7 +90,12 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
       stream?.getTracks().forEach(t => t.stop());
       clearInterval(interval);
     };
-  }, [users, isScanning]);
+  }, [users, isScanning, restartKey]);
+
+  const handleRestartCamera = () => {
+    setRestartKey(prev => prev + 1);
+    toast.info('Reiniciando cámara...');
+  };
 
   const handleAttendance = async (type: AttendanceType) => {
     if (!recognizedUser) return;
@@ -145,6 +151,17 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
             playsInline
             className="w-full h-full object-cover grayscale-[0.5] -scale-x-100"
           />
+          <div className="absolute top-4 right-4 z-10">
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className="rounded-full bg-black/40 border-white/20 text-white hover:bg-black/60 backdrop-blur-sm"
+              onClick={handleRestartCamera}
+              title="Reiniciar Cámara"
+            >
+              <RefreshCcw size={18} />
+            </Button>
+          </div>
           <div className="absolute inset-0 pointer-events-none border-[20px] border-black/20 flex items-center justify-center">
              <div className="w-64 h-64 border-2 border-primary/50 rounded-full border-dashed animate-[spin_10s_linear_infinite]"></div>
           </div>
