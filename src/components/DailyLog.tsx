@@ -411,36 +411,45 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     // Activities
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 5,
-      head: [['ÍTEM', 'ACTIVIDAD', 'UNIDAD', 'PLANIFICADO', 'EJECUTADO', 'ACUMULADO', 'ESTADO']],
-      body: currentLog.activities.map(a => [a.item, a.description, a.unit, a.planned, a.executedToday, a.accumulated, a.status.toUpperCase()]),
-      theme: 'grid'
+      head: [['ÍTEM', 'ACTIVIDAD', 'UNIDAD', 'PLANIFICADO', 'EJECUTADO', 'ACUMULADO', 'ESTADO', 'FOTO']],
+      body: currentLog.activities.map(a => [a.item, a.description, a.unit, a.planned, a.executedToday, a.accumulated, a.status.toUpperCase(), '']),
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 15 },
+        3: { cellWidth: 18 },
+        4: { cellWidth: 18 },
+        5: { cellWidth: 18 },
+        6: { cellWidth: 20 },
+        7: { cellWidth: 30 }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index < currentLog.activities.length) {
+          const activity = currentLog.activities[data.row.index];
+          if (activity && activity.image) {
+            data.row.height = 25; 
+          }
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 7) {
+          const activity = currentLog.activities[data.row.index];
+          if (activity && activity.image) {
+            try {
+              const x = data.cell.x + 2;
+              const y = data.cell.y + 2;
+              const w = data.cell.width - 4;
+              const h = data.cell.height - 4;
+              doc.addImage(activity.image, 'JPEG', x, y, w, h);
+            } catch (e) {
+              console.error('Error drawing image in PDF table', e);
+            }
+          }
+        }
+      }
     });
-
-    // Activity Images Section
-    const activitiesWithImages = currentLog.activities.filter(a => a.image);
-    if (activitiesWithImages.length > 0) {
-      doc.addPage();
-      doc.setFontSize(16);
-      doc.text('EVIDENCIA FOTOGRÁFICA DE ACTIVIDADES', 15, 20);
-      
-      let yPos = 30;
-      activitiesWithImages.forEach((a, index) => {
-        if (yPos > 240) {
-          doc.addPage();
-          yPos = 20;
-        }
-        
-        doc.setFontSize(10);
-        doc.text(`Actividad ${a.item}: ${a.description}`, 15, yPos);
-        try {
-          doc.addImage(a.image!, 'JPEG', 15, yPos + 2, 80, 60);
-          yPos += 70;
-        } catch (e) {
-          console.error('Error adding image to PDF', e);
-          yPos += 10;
-        }
-      });
-    }
 
     // Safety
     autoTable(doc, {
