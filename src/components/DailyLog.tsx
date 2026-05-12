@@ -271,10 +271,9 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         id: Math.random().toString(36).substr(2, 5),
         item: items.length + 1,
         description: '',
-        unit: 'M2',
-        planned: 0,
-        executedToday: 0,
-        accumulated: 0,
+        operator: '',
+        tower: '',
+        side: '-',
         status: 'en proceso'
       });
     } else if (section === 'personnel') {
@@ -415,19 +414,18 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     // Activities
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 5,
-      head: [['ÍTEM', 'ACTIVIDAD', 'UNIDAD', 'PLANIFICADO', 'EJECUTADO', 'ACUMULADO', 'ESTADO', 'FOTO']],
-      body: currentLog.activities.map(a => [a.item, a.description, a.unit, a.planned, a.executedToday, a.accumulated, a.status.toUpperCase(), '']),
+      head: [['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
+      body: currentLog.activities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
       columnStyles: {
         0: { cellWidth: 10 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 15 },
-        3: { cellWidth: 18 },
-        4: { cellWidth: 18 },
-        5: { cellWidth: 18 },
-        6: { cellWidth: 20 },
-        7: { cellWidth: 30 }
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 15 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 30 }
       },
       didParseCell: (data) => {
         if (data.section === 'body' && data.row.index < currentLog.activities.length) {
@@ -627,10 +625,9 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                       <TableRow>
                         <TableHead className="w-[50px]">Item</TableHead>
                         <TableHead>Descripción de Actividad</TableHead>
-                        <TableHead className="w-[80px]">U/M</TableHead>
-                        <TableHead className="w-[100px] text-right">Plan.</TableHead>
-                        <TableHead className="w-[100px] text-right">Hoy</TableHead>
-                        <TableHead className="w-[100px] text-right">Acum.</TableHead>
+                        <TableHead>Operario</TableHead>
+                        <TableHead className="w-[100px]">Torre</TableHead>
+                        <TableHead className="w-[80px]">Lado</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-[80px]">Foto</TableHead>
                         {isEditing && <TableHead className="w-[50px]"></TableHead>}
@@ -644,16 +641,32 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                             <Input value={a.description || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
                           </TableCell>
                           <TableCell>
-                            <Input value={a.unit || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'unit', e.target.value)} className="h-8 rounded-lg text-sm" />
+                            <select 
+                               disabled={!isEditing}
+                               value={a.operator || ''}
+                               onChange={e => updateItem('activities', a.id, 'operator', e.target.value)}
+                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
+                              >
+                               <option value="">Seleccionar...</option>
+                               {users.map(u => (
+                                 <option key={u.id} value={u.name}>{u.name}</option>
+                               ))}
+                             </select>
                           </TableCell>
                           <TableCell>
-                            <Input type="number" value={a.planned ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'planned', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
+                            <Input value={a.tower || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'tower', e.target.value)} className="h-8 rounded-lg text-sm" placeholder="Ej: A1" />
                           </TableCell>
                           <TableCell>
-                            <Input type="number" value={a.executedToday ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'executedToday', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right font-bold text-primary" />
-                          </TableCell>
-                          <TableCell>
-                            <Input type="number" value={a.accumulated ?? 0} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'accumulated', Number(e.target.value))} className="h-8 rounded-lg text-sm text-right" />
+                            <select 
+                               disabled={!isEditing}
+                               value={a.side || '-'}
+                               onChange={e => updateItem('activities', a.id, 'side', e.target.value)}
+                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
+                              >
+                               <option value="-">-</option>
+                               <option value="A">Lado A</option>
+                               <option value="B">Lado B</option>
+                             </select>
                           </TableCell>
                           <TableCell>
                              <select 

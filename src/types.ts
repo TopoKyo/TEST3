@@ -87,10 +87,9 @@ export interface ActivityEntry {
   id: string;
   item: number;
   description: string;
-  unit: string;
-  planned: number;
-  executedToday: number;
-  accumulated: number;
+  operator: string;
+  tower: string;
+  side: 'A' | 'B' | '-';
   status: 'pendiente' | 'en proceso' | 'listo';
   image?: string;
 }
