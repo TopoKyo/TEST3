@@ -5,14 +5,17 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Download, Upload, FileSpreadsheet, Calendar, History, Trash2, Users } from 'lucide-react';
+import { Download, Upload, FileSpreadsheet, Calendar, History, Trash2, Users, Plus, Pencil } from 'lucide-react';
 import { AttendanceLog, User, ATTENDANCE_LABELS, AttendanceType } from '@/src/types';
 import { firestoreService } from '@/src/lib/firestoreService';
-import { format, parseISO, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, parseISO, differenceInMinutes, startOfMonth, endOfMonth, isWithinInterval, setHours, setMinutes } from 'date-fns';
 import { es } from 'date-fns/locale';
 import * as XLSX from 'xlsx';
 import { cn } from '@/lib/utils';
 import { buttonVariants } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 interface AttendanceHistoryProps {
   logs: AttendanceLog[];
@@ -23,6 +26,91 @@ interface AttendanceHistoryProps {
 export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceHistoryProps) {
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
+  const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+  const [editingLog, setEditingLog] = useState<AttendanceLog | null>(null);
+  const [manualLog, setManualLog] = useState<{
+    userId: string;
+    type: AttendanceType;
+    date: string;
+    time: string;
+  }>({
+    userId: '',
+    type: 'arrival',
+    date: format(new Date(), 'yyyy-MM-dd'),
+    time: format(new Date(), 'HH:mm')
+  });
+
+  const handleOpenManualEntry = () => {
+    setEditingLog(null);
+    setManualLog({
+      userId: selectedUser || '',
+      type: 'arrival',
+      date: format(new Date(), 'yyyy-MM-dd'),
+      time: format(new Date(), 'HH:mm')
+    });
+    setIsManualEntryOpen(true);
+  };
+
+  const handleEditLog = (log: AttendanceLog) => {
+    const dt = parseISO(log.timestamp);
+    setEditingLog(log);
+    setManualLog({
+      userId: log.userId,
+      type: log.type,
+      date: format(dt, 'yyyy-MM-dd'),
+      time: format(dt, 'HH:mm')
+    });
+    setIsManualEntryOpen(true);
+  };
+
+  const saveManualLog = async () => {
+    if (!manualLog.userId || !manualLog.date || !manualLog.time) {
+      toast.error('Por favor complete todos los campos');
+      return;
+    }
+
+    const user = users.find(u => u.id === manualLog.userId);
+    if (!user) return;
+
+    try {
+      const [y, m, d] = manualLog.date.split('-').map(Number);
+      const [hh, mm] = manualLog.time.split(':').map(Number);
+      const timestamp = new Date(y, m - 1, d, hh, mm).toISOString();
+
+      const logData: AttendanceLog = {
+        id: editingLog ? editingLog.id : Math.random().toString(36).substr(2, 9),
+        userId: user.id,
+        userName: user.name,
+        type: manualLog.type,
+        timestamp
+      };
+
+      if (editingLog) {
+        await firestoreService.update('attendance', editingLog.id, logData);
+        toast.success('Registro actualizado');
+      } else {
+        await firestoreService.add('attendance', logData);
+        toast.success('Registro manual guardado');
+      }
+      
+      setIsManualEntryOpen(false);
+      onUpdate();
+    } catch (error) {
+      console.error('Error saving manual log:', error);
+      toast.error('Error al guardar el registro');
+    }
+  };
+
+  const deleteLog = async (id: string) => {
+    if (!confirm('¿Está seguro de eliminar este registro?')) return;
+    try {
+      await firestoreService.delete('attendance', id);
+      toast.success('Registro eliminado');
+      onUpdate();
+    } catch (error) {
+      toast.error('Error al eliminar registro');
+    }
+  };
 
   const filteredLogs = useMemo(() => {
     if (!selectedUser) return [];
@@ -196,6 +284,13 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
           </div>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={handleOpenManualEntry}
+            className="rounded-xl border-neutral-200 bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Carga Manual</span>
+          </Button>
           <label className={cn(buttonVariants({ variant: 'outline' }), "gap-2 rounded-xl border-neutral-200 cursor-pointer")}>
             <Upload size={16} />
             <span className="hidden sm:inline">Importar</span>
@@ -268,12 +363,13 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
                     <TableHead className="font-bold">Fecha</TableHead>
                     <TableHead className="font-bold">Hora</TableHead>
                     <TableHead className="font-bold">Tipo de Evento</TableHead>
+                    <TableHead className="font-bold text-right">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredLogs.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-40 text-center text-neutral-400 italic">
+                      <TableCell colSpan={4} className="h-40 text-center text-neutral-400 italic">
                         No hay registros para este período.
                       </TableCell>
                     </TableRow>
@@ -296,6 +392,26 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
                             {ATTENDANCE_LABELS[log.type]}
                           </Badge>
                         </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-neutral-400 hover:text-primary rounded-lg"
+                              onClick={() => handleEditLog(log)}
+                            >
+                              <Pencil size={14} />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-neutral-400 hover:text-rose-600 rounded-lg"
+                              onClick={() => deleteLog(log.id)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))
                   )}
@@ -305,6 +421,79 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
           </Card>
         </>
       )}
+
+      <Dialog open={isManualEntryOpen} onOpenChange={setIsManualEntryOpen}>
+        <DialogContent className="rounded-3xl sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingLog ? 'Editar Registro' : 'Carga de Asistencia Manual'}</DialogTitle>
+            <DialogDescription>
+              Ingrese los detalles de asistencia para el trabajador seleccionado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Trabajador</Label>
+              <Select 
+                value={manualLog.userId} 
+                onValueChange={(val) => setManualLog(prev => ({ ...prev, userId: val }))}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Seleccionar trabajador..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map(u => (
+                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Tipo de Evento</Label>
+              <Select 
+                value={manualLog.type} 
+                onValueChange={(val) => setManualLog(prev => ({ ...prev, type: val as AttendanceType }))}
+              >
+                <SelectTrigger className="rounded-xl">
+                  <SelectValue placeholder="Tipo de marcaje..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(ATTENDANCE_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Fecha</Label>
+                <Input 
+                  type="date" 
+                  className="rounded-xl" 
+                  value={manualLog.date}
+                  onChange={e => setManualLog(prev => ({ ...prev, date: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Hora</Label>
+                <Input 
+                  type="time" 
+                  className="rounded-xl" 
+                  value={manualLog.time}
+                  onChange={e => setManualLog(prev => ({ ...prev, time: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2 sm:justify-end">
+            <Button variant="outline" className="rounded-xl" onClick={() => setIsManualEntryOpen(false)}>
+              Cancelar
+            </Button>
+            <Button className="rounded-xl bg-neutral-900 font-bold" onClick={saveManualLog}>
+              {editingLog ? 'Actualizar' : 'Guardar Registro'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
