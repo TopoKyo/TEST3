@@ -51,6 +51,7 @@ import {
   SafetyChecklist,
   AttendanceLog
 } from '@/src/types';
+import { compressImage } from '../lib/imageUtils';
 import { firestoreService } from '@/src/lib/firestoreService';
 import { format, parseISO, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -155,7 +156,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     setFacingMode(prev => prev === 'user' ? 'environment' : 'user');
   };
 
-  const capturePhoto = () => {
+  const capturePhoto = async () => {
     if (videoRef.current && activeActivityId) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
@@ -163,7 +164,14 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       const ctx = canvas.getContext('2d');
       ctx?.drawImage(videoRef.current, 0, 0);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      updateItem('activities', activeActivityId, 'image', dataUrl);
+      
+      try {
+        const compressed = await compressImage(dataUrl, 800, 0.6);
+        updateItem('activities', activeActivityId, 'image', compressed);
+      } catch (e) {
+        updateItem('activities', activeActivityId, 'image', dataUrl);
+      }
+      
       setCameraOpen(false);
     }
   };
@@ -262,19 +270,21 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     toast.success('Datos del día anterior cargados');
   };
 
-  const addItem = (section: 'activities' | 'personnel' | 'problems' | 'nextDayPlan') => {
+  const addItem = (section: 'activities' | 'personnel' | 'problems' | 'nextDayPlan', period?: 'morning' | 'afternoon') => {
     if (!currentLog) return;
     const items = [...currentLog[section]];
     
     if (section === 'activities') {
+      const sectionActivities = (items as ActivityEntry[]).filter(a => a.period === period);
       (items as ActivityEntry[]).push({
         id: Math.random().toString(36).substr(2, 5),
-        item: items.length + 1,
+        item: sectionActivities.length + 1,
         description: '',
         operator: '',
         tower: '',
         side: '-',
-        status: 'en proceso'
+        status: 'en proceso',
+        period: period || 'morning'
       });
     } else if (section === 'personnel') {
       (items as PersonnelEntry[]).push({
@@ -322,8 +332,14 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
 
   const handleActivityImage = (id: string, file: File) => {
     const reader = new FileReader();
-    reader.onloadend = () => {
-      updateItem('activities', id, 'image', reader.result as string);
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const compressed = await compressImage(base64, 800, 0.6);
+        updateItem('activities', id, 'image', compressed);
+      } catch (e) {
+        updateItem('activities', id, 'image', base64);
+      }
     };
     reader.readAsDataURL(file);
   };
@@ -411,11 +427,12 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       theme: 'striped'
     });
 
-    // Activities
+    // Activities Morning
+    const morningActivities = currentLog.activities.filter(a => a.period === 'morning' || !a.period);
     autoTable(doc, {
-      startY: (doc as any).lastAutoTable.finalY + 5,
-      head: [['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
-      body: currentLog.activities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [[{ content: 'ACTIVIDADES INICIO JORNADA', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
+      body: morningActivities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
       columnStyles: {
@@ -428,16 +445,59 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         6: { cellWidth: 30 }
       },
       didParseCell: (data) => {
-        if (data.section === 'body' && data.row.index < currentLog.activities.length) {
-          const activity = currentLog.activities[data.row.index];
+        if (data.section === 'body' && data.row.index < morningActivities.length) {
+          const activity = morningActivities[data.row.index];
           if (activity && activity.image) {
             data.row.height = 25; 
           }
         }
       },
       didDrawCell: (data) => {
-        if (data.section === 'body' && data.column.index === 7) {
-          const activity = currentLog.activities[data.row.index];
+        if (data.section === 'body' && data.column.index === 6) {
+          const activity = morningActivities[data.row.index];
+          if (activity && activity.image) {
+            try {
+              const x = data.cell.x + 2;
+              const y = data.cell.y + 2;
+              const w = data.cell.width - 4;
+              const h = data.cell.height - 4;
+              doc.addImage(activity.image, 'JPEG', x, y, w, h);
+            } catch (e) {
+              console.error('Error drawing image in PDF table', e);
+            }
+          }
+        }
+      }
+    });
+
+    // Activities Afternoon
+    const afternoonActivities = currentLog.activities.filter(a => a.period === 'afternoon');
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [[{ content: 'ACTIVIDADES TARDE', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
+      body: afternoonActivities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+      columnStyles: {
+        0: { cellWidth: 10 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 15 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 30 }
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index < afternoonActivities.length) {
+          const activity = afternoonActivities[data.row.index];
+          if (activity && activity.image) {
+            data.row.height = 25; 
+          }
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 6) {
+          const activity = afternoonActivities[data.row.index];
           if (activity && activity.image) {
             try {
               const x = data.cell.x + 2;
@@ -617,8 +677,8 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                 </div>
               </LogSection>
 
-              {/* Section 4: Actividades Realizadas */}
-              <LogSection title="Actividades Realizadas" icon={<History />} isEditing={isEditing} onAdd={() => addItem('activities')}>
+              {/* Section 4: Actividades Realizadas - Mañana */}
+              <LogSection title="Actividad Realizada Inicio Jornada" icon={<History />} isEditing={isEditing} onAdd={() => addItem('activities', 'morning')}>
                 <div className="overflow-x-auto">
                    <Table>
                     <TableHeader>
@@ -634,7 +694,139 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {currentLog?.activities.map((a, idx) => (
+                      {currentLog?.activities.filter(a => a.period === 'morning' || !a.period).map((a, idx) => (
+                        <TableRow key={a.id}>
+                          <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
+                          <TableCell>
+                            <Input value={a.description || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
+                          </TableCell>
+                          <TableCell>
+                            <select 
+                               disabled={!isEditing}
+                               value={a.operator || ''}
+                               onChange={e => updateItem('activities', a.id, 'operator', e.target.value)}
+                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
+                              >
+                               <option value="">Seleccionar...</option>
+                               {users.map(u => (
+                                 <option key={u.id} value={u.name}>{u.name}</option>
+                               ))}
+                             </select>
+                          </TableCell>
+                          <TableCell>
+                            <Input value={a.tower || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'tower', e.target.value)} className="h-8 rounded-lg text-sm" placeholder="Ej: A1" />
+                          </TableCell>
+                          <TableCell>
+                            <select 
+                               disabled={!isEditing}
+                               value={a.side || '-'}
+                               onChange={e => updateItem('activities', a.id, 'side', e.target.value)}
+                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
+                              >
+                               <option value="-">-</option>
+                               <option value="A">Lado A</option>
+                               <option value="B">Lado B</option>
+                             </select>
+                          </TableCell>
+                          <TableCell>
+                             <select 
+                               disabled={!isEditing}
+                               value={a.status || 'en proceso'}
+                               onChange={e => updateItem('activities', a.id, 'status', e.target.value)}
+                               className="h-8 rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none"
+                              >
+                               <option value="pendiente">Pendiente</option>
+                               <option value="en proceso">En proceso</option>
+                               <option value="listo">Listo</option>
+                             </select>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex items-center gap-1">
+                              {a.image ? (
+                                <div className="relative group/img">
+                                  <img 
+                                    src={a.image} 
+                                    alt="Activity" 
+                                    className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
+                                    onClick={() => window.open(a.image, '_blank')}
+                                  />
+                                  {isEditing && (
+                                    <button 
+                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
+                                      onClick={() => updateItem('activities', a.id, 'image', null)}
+                                    >
+                                      <X size={10} />
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                isEditing && (
+                                  <div className="flex items-center gap-1">
+                                    <div className="relative group/upload">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleActivityImage(a.id, file);
+                                        }}
+                                        title="Subir Archivo"
+                                      />
+                                      <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all">
+                                        <Upload size={16} />
+                                      </Button>
+                                    </div>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all"
+                                      onClick={() => {
+                                        setActiveActivityId(a.id);
+                                        setCameraOpen(true);
+                                      }}
+                                      title="Tomar Foto"
+                                    >
+                                      <Camera size={16} />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                              {!isEditing && !a.image && <span className="text-xs text-neutral-300 italic">Sin foto</span>}
+                            </div>
+                          </TableCell>
+                          {isEditing && (
+                            <TableCell>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 rounded-lg" onClick={() => removeItem('activities', a.id)}>
+                                <Trash2 size={14} />
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </LogSection>
+
+              {/* Section 5: Actividades Realizadas - Tarde */}
+              <LogSection title="Actividad Realizada Tarde" icon={<History />} isEditing={isEditing} onAdd={() => addItem('activities', 'afternoon')}>
+                <div className="overflow-x-auto">
+                   <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[50px]">Item</TableHead>
+                        <TableHead>Descripción de Actividad</TableHead>
+                        <TableHead>Operario</TableHead>
+                        <TableHead className="w-[100px]">Torre</TableHead>
+                        <TableHead className="w-[80px]">Lado</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="w-[80px]">Foto</TableHead>
+                        {isEditing && <TableHead className="w-[50px]"></TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {currentLog?.activities.filter(a => a.period === 'afternoon').map((a, idx) => (
                         <TableRow key={a.id}>
                           <TableCell className="font-mono text-xs">{idx + 1}</TableCell>
                           <TableCell>

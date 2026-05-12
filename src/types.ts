@@ -92,6 +92,7 @@ export interface ActivityEntry {
   side: 'A' | 'B' | '-';
   status: 'pendiente' | 'en proceso' | 'listo';
   image?: string;
+  period: 'morning' | 'afternoon';
 }
 
 export interface SafetyChecklist {
