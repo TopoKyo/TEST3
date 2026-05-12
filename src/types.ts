@@ -87,7 +87,8 @@ export interface ActivityEntry {
   id: string;
   item: number;
   description: string;
-  operator: string;
+  operator?: string;
+  operators?: string[];
   tower: string;
   side: 'A' | 'B' | '-';
   status: 'pendiente' | 'en proceso' | 'listo';

@@ -32,7 +32,9 @@ import {
   Image as ImageIcon,
   X,
   Upload,
-  RefreshCw
+  RefreshCw,
+  Check,
+  ChevronsUpDown
 } from 'lucide-react';
 import { 
   Dialog,
@@ -41,6 +43,19 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { 
   WorkLog, 
   User, 
@@ -66,6 +81,73 @@ interface DailyLogProps {
   users: User[];
   attendanceLogs: AttendanceLog[];
 }
+
+const OperatorMultiSelect = ({ 
+  selected, 
+  onSelect, 
+  users, 
+  disabled 
+}: { 
+  selected: string[], 
+  onSelect: (names: string[]) => void, 
+  users: User[], 
+  disabled: boolean 
+}) => {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          disabled={disabled}
+          className="h-8 w-full justify-between rounded-lg border-neutral-200 text-xs px-2 bg-white font-normal hover:bg-neutral-50"
+        >
+          <span className="truncate">
+            {selected.length > 0 
+              ? `${selected.length} seleccionados`
+              : "Seleccionar..."}
+          </span>
+          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar operario..." className="h-8" />
+          <CommandList>
+            <CommandEmpty>No se encontraron resultados.</CommandEmpty>
+            <CommandGroup>
+              {users.map((user) => (
+                <CommandItem
+                  key={user.id}
+                  value={user.name}
+                  onSelect={() => {
+                    const isSelected = selected.includes(user.name);
+                    const newValue = isSelected
+                      ? selected.filter((name) => name !== user.name)
+                      : [...selected, user.name];
+                    onSelect(newValue);
+                  }}
+                  className="text-xs"
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-3 w-3",
+                      selected.includes(user.name) ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {user.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 
 const EMPTY_LOG: Omit<WorkLog, 'id' | 'date'> = {
   reportNumber: 0,
@@ -280,7 +362,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         id: Math.random().toString(36).substr(2, 5),
         item: sectionActivities.length + 1,
         description: '',
-        operator: '',
+        operators: [],
         tower: '',
         side: '-',
         status: 'en proceso',
@@ -431,8 +513,8 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     const morningActivities = currentLog.activities.filter(a => a.period === 'morning' || !a.period);
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
-      head: [[{ content: 'ACTIVIDADES INICIO JORNADA', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
-      body: morningActivities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
+      head: [[{ content: 'ACTIVIDADES INICIO JORNADA', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIOS', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
+      body: morningActivities.map(a => [a.item, a.description, a.operators?.join(', ') || a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
       columnStyles: {
@@ -474,8 +556,8 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     const afternoonActivities = currentLog.activities.filter(a => a.period === 'afternoon');
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
-      head: [[{ content: 'ACTIVIDADES TARDE', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIO', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
-      body: afternoonActivities.map(a => [a.item, a.description, a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
+      head: [[{ content: 'ACTIVIDADES TARDE', colSpan: 7, styles: { halign: 'center', fillColor: [40, 40, 40] } }], ['ÍTEM', 'ACTIVIDAD', 'OPERARIOS', 'TORRE', 'LADO', 'ESTADO', 'FOTO']],
+      body: afternoonActivities.map(a => [a.item, a.description, a.operators?.join(', ') || a.operator || '-', a.tower || '-', a.side || '-', a.status.toUpperCase(), '']),
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
       columnStyles: {
@@ -685,7 +767,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                       <TableRow>
                         <TableHead className="w-[50px]">Item</TableHead>
                         <TableHead>Descripción de Actividad</TableHead>
-                        <TableHead>Operario</TableHead>
+                        <TableHead className="w-[180px]">Operarios</TableHead>
                         <TableHead className="w-[100px]">Torre</TableHead>
                         <TableHead className="w-[80px]">Lado</TableHead>
                         <TableHead>Estado</TableHead>
@@ -701,17 +783,19 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                             <Input value={a.description || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
                           </TableCell>
                           <TableCell>
-                            <select 
-                               disabled={!isEditing}
-                               value={a.operator || ''}
-                               onChange={e => updateItem('activities', a.id, 'operator', e.target.value)}
-                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
-                              >
-                               <option value="">Seleccionar...</option>
-                               {users.map(u => (
-                                 <option key={u.id} value={u.name}>{u.name}</option>
-                               ))}
-                             </select>
+                            <OperatorMultiSelect 
+                              selected={a.operators || []}
+                              users={users}
+                              disabled={!isEditing}
+                              onSelect={(newOps) => updateItem('activities', a.id, 'operators', newOps)}
+                            />
+                            {(!isEditing && (a.operators || []).length > 0) && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(a.operators || []).map((op, i) => (
+                                  <Badge key={i} variant="secondary" className="text-[9px] px-1 h-3.5">{op}</Badge>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Input value={a.tower || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'tower', e.target.value)} className="h-8 rounded-lg text-sm" placeholder="Ej: A1" />
@@ -817,7 +901,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                       <TableRow>
                         <TableHead className="w-[50px]">Item</TableHead>
                         <TableHead>Descripción de Actividad</TableHead>
-                        <TableHead>Operario</TableHead>
+                        <TableHead className="w-[180px]">Operarios</TableHead>
                         <TableHead className="w-[100px]">Torre</TableHead>
                         <TableHead className="w-[80px]">Lado</TableHead>
                         <TableHead>Estado</TableHead>
@@ -833,17 +917,19 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                             <Input value={a.description || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'description', e.target.value)} className="h-8 rounded-lg text-sm" />
                           </TableCell>
                           <TableCell>
-                            <select 
-                               disabled={!isEditing}
-                               value={a.operator || ''}
-                               onChange={e => updateItem('activities', a.id, 'operator', e.target.value)}
-                               className="h-8 w-full rounded-lg border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white"
-                              >
-                               <option value="">Seleccionar...</option>
-                               {users.map(u => (
-                                 <option key={u.id} value={u.name}>{u.name}</option>
-                               ))}
-                             </select>
+                            <OperatorMultiSelect 
+                              selected={a.operators || []}
+                              users={users}
+                              disabled={!isEditing}
+                              onSelect={(newOps) => updateItem('activities', a.id, 'operators', newOps)}
+                            />
+                            {(!isEditing && (a.operators || []).length > 0) && (
+                              <div className="flex flex-wrap gap-1 mt-1">
+                                {(a.operators || []).map((op, i) => (
+                                  <Badge key={i} variant="secondary" className="text-[9px] px-1 h-3.5">{op}</Badge>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Input value={a.tower || ''} disabled={!isEditing} onChange={e => updateItem('activities', a.id, 'tower', e.target.value)} className="h-8 rounded-lg text-sm" placeholder="Ej: A1" />
