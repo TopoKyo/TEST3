@@ -27,11 +27,19 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
 
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let interval: NodeJS.Timeout;
+    let animationFrameId: number;
+    let isProcessing = false;
+    let frameCount = 0;
 
     async function startCamera() {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: { ideal: 640 }, 
+            height: { ideal: 480 },
+            facingMode: 'user'
+          } 
+        });
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -45,11 +53,32 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
     if (users.length > 0) {
       const matcher = faceService.createMatcher(users.map(u => ({ name: u.id, descriptor: u.faceDescriptor })));
 
-      interval = setInterval(async () => {
-        if (videoRef.current && isScanning) {
+      const scan = async () => {
+        if (!videoRef.current || !isScanning) {
+          animationFrameId = requestAnimationFrame(scan);
+          return;
+        }
+
+        // Only process every 5th frame to save CPU
+        frameCount++;
+        if (frameCount % 6 !== 0) {
+          animationFrameId = requestAnimationFrame(scan);
+          return;
+        }
+
+        if (isProcessing) {
+          animationFrameId = requestAnimationFrame(scan);
+          return;
+        }
+
+        isProcessing = true;
+
+        try {
           const results = await faceService.recognizeFace(videoRef.current, matcher);
-          if (results.length > 0) {
+          
+          if (results.length > 0 && isScanning) {
             const bestMatch = results[0];
+            // Threshold is already applied in matcher, but we check distance here for extra safety
             if (bestMatch.label !== 'unknown' && bestMatch.distance < 0.45) {
               const user = users.find(u => u.id === bestMatch.label);
               if (user) {
@@ -75,20 +104,22 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
                 setRecognizedUser(user);
                 setIsScanning(false);
               }
-            } else if (bestMatch.label === 'unknown' && bestMatch.distance < 0.4) {
-               // Only toast if we are reasonably sure it's a face but not recognized
-               // To avoid spamming, we could use a ref to track when we last toasted
             }
-          } else {
-            setRecognizedUser(null);
           }
+        } catch (error) {
+          console.error("Scanning error:", error);
+        } finally {
+          isProcessing = false;
+          animationFrameId = requestAnimationFrame(scan);
         }
-      }, 500);
+      };
+
+      animationFrameId = requestAnimationFrame(scan);
     }
 
     return () => {
       stream?.getTracks().forEach(t => t.stop());
-      clearInterval(interval);
+      cancelAnimationFrame(animationFrameId);
     };
   }, [users, isScanning, restartKey]);
 

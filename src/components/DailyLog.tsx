@@ -128,7 +128,11 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     }
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: mode } 
+        video: { 
+          facingMode: mode,
+          width: { ideal: 640 },
+          height: { ideal: 480 }
+        } 
       });
       setStream(newStream);
       if (videoRef.current) {

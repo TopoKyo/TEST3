@@ -188,12 +188,20 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
   // Camera integration
   useEffect(() => {
     let stream: MediaStream | null = null;
-    let interval: NodeJS.Timeout;
+    let animationFrameId: number;
+    let isProcessing = false;
+    let frameCount = 0;
 
     if (isScanning && movementType === 'exit') {
       const startCam = async () => {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              width: { ideal: 640 }, 
+              height: { ideal: 480 },
+              facingMode: 'user'
+            } 
+          });
           if (videoRef.current) videoRef.current.srcObject = stream;
         } catch (e) { toast.error('Cámara no disponible'); }
       };
@@ -201,10 +209,29 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       if (users.length > 0) {
         const matcher = faceService.createMatcher(users.map(u => ({ name: u.id, descriptor: u.faceDescriptor })));
-        interval = setInterval(async () => {
-          if (videoRef.current && isScanning) {
+        
+        const scan = async () => {
+          if (!videoRef.current || !isScanning) {
+            animationFrameId = requestAnimationFrame(scan);
+            return;
+          }
+
+          frameCount++;
+          if (frameCount % 6 !== 0) {
+            animationFrameId = requestAnimationFrame(scan);
+            return;
+          }
+
+          if (isProcessing) {
+            animationFrameId = requestAnimationFrame(scan);
+            return;
+          }
+
+          isProcessing = true;
+
+          try {
             const results = await faceService.recognizeFace(videoRef.current, matcher);
-            if (results.length > 0) {
+            if (results.length > 0 && isScanning) {
               const match = results[0];
               if (match.label !== 'unknown' && match.distance < 0.45) {
                 const user = users.find(u => u.id === match.label);
@@ -214,14 +241,20 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                 }
               }
             }
+          } catch (error) {
+            console.error("Inventory scan error:", error);
+          } finally {
+            isProcessing = false;
+            animationFrameId = requestAnimationFrame(scan);
           }
-        }, 500);
+        };
+        animationFrameId = requestAnimationFrame(scan);
       }
     }
 
     return () => {
       stream?.getTracks().forEach(t => t.stop());
-      clearInterval(interval);
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
   }, [isScanning, movementType, users]);
 

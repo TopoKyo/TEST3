@@ -4,11 +4,13 @@ const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.
 
 class FaceService {
   private isLoaded = false;
+  private tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 });
 
   async loadModels() {
     if (this.isLoaded) return;
     
     await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
       faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
       faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
       faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
@@ -32,12 +34,13 @@ class FaceService {
       return new faceapi.LabeledFaceDescriptors(user.name, [float32Descriptor]);
     });
 
-    return new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+    return new faceapi.FaceMatcher(labeledDescriptors, 0.45); // Adjust threshold
   }
 
   async recognizeFace(imageElement: HTMLImageElement | HTMLVideoElement, matcher: faceapi.FaceMatcher) {
+    // Use tiny face detector for performance in scanning loop
     const detections = await faceapi
-      .detectAllFaces(imageElement)
+      .detectAllFaces(imageElement, this.tinyOptions)
       .withFaceLandmarks()
       .withFaceDescriptors();
 

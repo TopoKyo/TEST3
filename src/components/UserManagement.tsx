@@ -33,7 +33,13 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
     const enableCamera = async () => {
       if (activeTab === 'camera' && videoRef.current) {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              width: { ideal: 640 }, 
+              height: { ideal: 480 },
+              facingMode: 'user'
+            } 
+          });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
           }
