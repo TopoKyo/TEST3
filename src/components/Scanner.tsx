@@ -6,10 +6,15 @@ import { toast } from 'sonner';
 import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight, RefreshCcw } from 'lucide-react';
 import { User, AttendanceType, ATTENDANCE_LABELS, AttendanceLog } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
+import * as faceapi from 'face-api.js';
 import { firestoreService } from '@/src/lib/firestoreService';
 import { collection, query, where, orderBy, limit, getDocs } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
+import { differenceInMinutes } from 'date-fns';
+
+// Simple cn helper for tailwind classes
+const cn = (...classes: (string | boolean | undefined)[]) => classes.filter(Boolean).join(' ');
 
 interface ScannerProps {
   users: User[];
@@ -24,12 +29,17 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
   const [lastLogType, setLastLogType] = useState<AttendanceType | null>(null);
   const [loading, setLoading] = useState(false);
   const [restartKey, setRestartKey] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState({ fps: 0, latency: 0 });
+  const [scanMessage, setScanMessage] = useState('Buscando rostro...');
+  const [faceQuality, setFaceQuality] = useState(0); // 0-100
 
   useEffect(() => {
     let stream: MediaStream | null = null;
     let animationFrameId: number;
-    let isProcessing = false;
-    let frameCount = 0;
+    let lastProcessTime = 0;
+    const FRAME_INTERVAL = 80; // ~12 fps for processing (enough for real-time and efficient)
+    let isActive = true;
 
     async function startCamera() {
       try {
@@ -37,14 +47,16 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
           video: { 
             width: { ideal: 640 }, 
             height: { ideal: 480 },
-            facingMode: 'user'
+            facingMode: 'user',
+            frameRate: { ideal: 30 }
           } 
         });
-        if (videoRef.current) {
+        if (videoRef.current && isActive) {
           videoRef.current.srcObject = stream;
         }
       } catch (err) {
         toast.error('No se pudo acceder a la cámara');
+        setError('Error de cámara');
       }
     }
 
@@ -53,102 +65,115 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
     if (users.length > 0) {
       const matcher = faceService.createMatcher(users.map(u => ({ name: u.id, descriptor: u.faceDescriptor })));
 
-      const scan = async () => {
-        if (!videoRef.current || !isScanning) {
-          animationFrameId = requestAnimationFrame(scan);
+      const loop = async (time: number) => {
+        if (!isActive || !isScanning || !videoRef.current || !matcher) {
+          animationFrameId = requestAnimationFrame(loop);
           return;
         }
 
-        // Only process every 2nd frame to save CPU while maintaining speed
-        frameCount++;
-        if (frameCount % 2 !== 0) {
-          animationFrameId = requestAnimationFrame(scan);
-          return;
-        }
-
-        if (isProcessing) {
-          animationFrameId = requestAnimationFrame(scan);
-          return;
-        }
-
-        isProcessing = true;
-
-        try {
-          const results = await faceService.recognizeFace(videoRef.current, matcher);
+        if (time - lastProcessTime > FRAME_INTERVAL) {
+          lastProcessTime = time;
+          const startTime = performance.now();
           
-          // Draw detection boxes on canvas for visual feedback
-          if (canvasRef.current && videoRef.current) {
-            const canvas = canvasRef.current;
-            const video = videoRef.current;
-            
-            // Match dimensions and resize results for the current display size
-            const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
-            faceapi.matchDimensions(canvas, displaySize);
-            const resizedResults = faceapi.resizeResults(results, displaySize);
-            
-            const ctx = canvas.getContext('2d');
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              resizedResults.forEach(result => {
-                const box = result.box;
-                ctx.strokeStyle = '#0ea5e9'; // primary color
-                ctx.lineWidth = 3;
-                ctx.strokeRect(box.x, box.y, box.width, box.height);
+          try {
+            const results = await faceService.recognizeFace(videoRef.current, matcher);
+            const latency = performance.now() - startTime;
+            setDebugInfo(prev => ({ fps: Math.round(1000 / (performance.now() - startTime)), latency: Math.round(latency) }));
+
+            if (canvasRef.current && videoRef.current) {
+              const canvas = canvasRef.current;
+              const video = videoRef.current;
+              const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
+              
+              if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+                faceapi.matchDimensions(canvas, displaySize);
+              }
+              
+              const resizedResults = faceapi.resizeResults(results, displaySize);
+              const ctx = canvas.getContext('2d');
+              
+              if (ctx) {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
                 
-                // Draw label if matched
-                if (result.label !== 'unknown') {
-                  ctx.fillStyle = '#0ea5e9';
-                  ctx.font = 'bold 16px sans-serif';
-                  const user = users.find(u => u.id === result.label);
-                  const name = user ? user.name : result.label;
-                  ctx.fillText(name, box.x, box.y > 25 ? box.y - 10 : 25);
-                }
-              });
-            }
-          }
+                if (resizedResults.length > 0) {
+                  const result = resizedResults[0];
+                  const box = result.box;
+                  
+                  // Centrality check
+                  const centerX = box.x + box.width / 2;
+                  const videoCenterX = displaySize.width / 2;
+                  const distFromCenter = Math.abs(centerX - videoCenterX);
+                  
+                  // Distance/Size check
+                  const faceArea = (box.width * box.height) / (displaySize.width * displaySize.height);
+                  
+                  let quality = 0;
+                  if (faceArea > 0.04) quality += 40;
+                  if (distFromCenter < displaySize.width * 0.15) quality += 30;
+                  if (result.distance && result.distance < 0.45) quality += 30;
+                  setFaceQuality(quality);
 
-          if (results.length > 0 && isScanning) {
-            const bestMatch = results[0];
-            // Threshold is already applied in matcher, but we check distance here for extra safety
-            if (bestMatch.label !== 'unknown' && bestMatch.distance < 0.45) {
-              const user = users.find(u => u.id === bestMatch.label);
-              if (user) {
-                // Fetch last log for this user to prevent duplicates
-                try {
-                  const logsRef = collection(db, 'attendance');
-                  const q = query(
-                    logsRef, 
-                    where('userId', '==', user.id), 
-                    orderBy('timestamp', 'desc'), 
-                    limit(1)
-                  );
-                  const snap = await getDocs(q);
-                  if (!snap.empty) {
-                    setLastLogType(snap.docs[0].data().type as AttendanceType);
+                  // Modern UI markers
+                  const color = result.label !== 'unknown' ? '#10b981' : '#f59e0b';
+                  ctx.strokeStyle = color;
+                  ctx.lineWidth = 4;
+                  const cL = Math.min(box.width, box.height) * 0.2;
+                  ctx.beginPath();
+                  ctx.moveTo(box.x, box.y + cL); ctx.lineTo(box.x, box.y); ctx.lineTo(box.x + cL, box.y);
+                  ctx.moveTo(box.x + box.width - cL, box.y); ctx.lineTo(box.x + box.width, box.y); ctx.lineTo(box.x + box.width, box.y + cL);
+                  ctx.moveTo(box.x + box.width, box.y + box.height - cL); ctx.lineTo(box.x + box.width, box.y + box.height); ctx.lineTo(box.x + box.width - cL, box.y + box.height);
+                  ctx.moveTo(box.x + cL, box.y + box.height); ctx.lineTo(box.x, box.y + box.height); ctx.lineTo(box.x, box.y + box.height - cL);
+                  ctx.stroke();
+
+                  if (faceArea < 0.04) {
+                    setScanMessage('Acércate un poco más');
+                  } else if (distFromCenter > displaySize.width * 0.15) {
+                    setScanMessage('Centra tu rostro');
+                  } else if (result.label !== 'unknown' && result.distance && result.distance < 0.4) {
+                    setScanMessage('Identificando...');
+                    const userMatch = users.find(u => u.id === result.label);
+                    if (userMatch) {
+                      // Small delay for UX and stability
+                      setTimeout(async () => {
+                        if (!isActive) return;
+                        try {
+                          const logsRef = collection(db, 'attendance');
+                          const q = query(logsRef, where('userId', '==', userMatch.id), orderBy('timestamp', 'desc'), limit(1));
+                          const snap = await getDocs(q);
+                          if (!snap.empty) {
+                            setLastLogType(snap.docs[0].data().type as AttendanceType);
+                          } else {
+                            setLastLogType(null);
+                          }
+                          setRecognizedUser(userMatch);
+                          setIsScanning(false);
+                        } catch (e) {
+                          console.error('Match error:', e);
+                        }
+                      }, 200);
+                    }
                   } else {
-                    setLastLogType(null);
+                    setScanMessage('Rostro detectado');
                   }
-                } catch (e) {
-                  console.error('Error fetching last log:', e);
+                } else {
+                  setFaceQuality(0);
+                  setScanMessage('Buscando rostro...');
                 }
-
-                setRecognizedUser(user);
-                setIsScanning(false);
               }
             }
+          } catch (error) {
+            console.error("Frame error:", error);
           }
-        } catch (error) {
-          console.error("Scanning error:", error);
-        } finally {
-          isProcessing = false;
-          animationFrameId = requestAnimationFrame(scan);
         }
+        
+        animationFrameId = requestAnimationFrame(loop);
       };
 
-      animationFrameId = requestAnimationFrame(scan);
+      animationFrameId = requestAnimationFrame(loop);
     }
 
     return () => {
+      isActive = false;
       stream?.getTracks().forEach(t => t.stop());
       cancelAnimationFrame(animationFrameId);
     };
@@ -222,9 +247,36 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
           />
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none z-10"
           />
-          <div className="absolute top-4 right-4 z-10">
+          
+          {/* Facial Guide UI */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className={cn(
+              "w-64 h-64 md:w-80 md:h-80 rounded-full border-2 transition-all duration-300 flex flex-col items-center justify-end pb-8",
+              faceQuality > 60 ? "border-emerald-500 bg-emerald-500/5" : "border-white/20 bg-black/10"
+            )}>
+              <span className={cn(
+                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                faceQuality > 60 ? "bg-emerald-500 text-white" : "bg-white/10 text-white/50"
+              )}>
+                {scanMessage}
+              </span>
+            </div>
+          </div>
+
+          <div className="absolute bottom-4 left-4 z-20 flex flex-col gap-1">
+             <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                <span className="text-[10px] font-mono text-white/70">LATENCY: {debugInfo.latency}ms</span>
+             </div>
+             <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md px-2 py-1 rounded-lg border border-white/10">
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                <span className="text-[10px] font-mono text-white/70">FPS: {debugInfo.fps}</span>
+             </div>
+          </div>
+
+          <div className="absolute top-4 right-4 z-20">
             <Button 
               variant="outline" 
               size="icon" 
