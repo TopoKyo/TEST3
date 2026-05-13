@@ -4,7 +4,7 @@ const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.
 
 class FaceService {
   private isLoaded = false;
-  private tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 160, scoreThreshold: 0.5 });
+  private tinyOptions = new faceapi.TinyFaceDetectorOptions({ inputSize: 128, scoreThreshold: 0.4 });
 
   async loadModels() {
     if (this.isLoaded) return;

@@ -28,6 +28,7 @@ import {
   Info,
   Pencil,
   FileBarChart,
+  TrendingUp,
   Camera,
   Image as ImageIcon,
   X,
@@ -194,6 +195,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
+  const [viewMode, setViewMode] = useState<'daily' | 'history'>('daily');
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -452,7 +454,8 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     
     // Add Logo
     try {
-      const logoData = await getBase64ImageFromURL('/logo.png');
+      const logoUrl = `${window.location.origin}/logo.png`;
+      const logoData = await getBase64ImageFromURL(logoUrl);
       // Adjusted size (40x20) and positioning (15, 12)
       doc.addImage(logoData, 'PNG', 15, 12, 40, 20);
     } catch (e) {
@@ -634,7 +637,12 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     doc.save(`Bitacora_${currentLog.date}.pdf`);
   };
 
-  if (loading) return <div className="p-12 text-center">Cargando bitácoras...</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center p-24 gap-4">
+      <RefreshCw className="h-10 w-10 text-primary animate-spin" />
+      <p className="font-bold text-neutral-400">Cargando bitácoras...</p>
+    </div>
+  );
 
   return (
     <div className="space-y-8 pb-12">
@@ -644,25 +652,101 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
           <p className="text-neutral-500 mt-1">Gestión de informes diarios, personal y trazabilidad de avance.</p>
         </div>
         
-        <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-neutral-100">
-          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(subDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
-            <ChevronLeft size={20} />
+        <div className="flex items-center gap-2 p-1 bg-neutral-100 rounded-2xl w-fit">
+          <Button 
+            variant={viewMode === 'daily' ? 'default' : 'ghost'} 
+            className="rounded-xl px-6" 
+            onClick={() => setViewMode('daily')}
+          >
+            Diario
           </Button>
-          <div className="flex flex-col px-4 items-center min-w-[200px]">
-             <span className="text-xs font-bold uppercase text-primary/70 tracking-widest leading-none">
-               {format(parseISO(currentDate), 'EEEE', { locale: es })}
-             </span>
-             <span className="text-lg font-black text-neutral-900">
-               {format(parseISO(currentDate), 'd \'de\' MMMM, yyyy', { locale: es })}
-             </span>
-          </div>
-          <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(addDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
-            <ChevronRight size={20} />
+          <Button 
+            variant={viewMode === 'history' ? 'default' : 'ghost'} 
+            className="rounded-xl px-6" 
+            onClick={() => setViewMode('history')}
+          >
+            Historial ({logs.length})
           </Button>
         </div>
+
+        {viewMode === 'daily' && (
+          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-neutral-100">
+            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(subDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
+              <ChevronLeft size={20} />
+            </Button>
+            <div className="flex flex-col px-4 items-center min-w-[200px]">
+               <span className="text-xs font-bold uppercase text-primary/70 tracking-widest leading-none">
+                 {format(parseISO(currentDate), 'EEEE', { locale: es })}
+               </span>
+               <span className="text-lg font-black text-neutral-900">
+                 {format(parseISO(currentDate), 'd \'de\' MMMM, yyyy', { locale: es })}
+               </span>
+            </div>
+            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(addDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
+              <ChevronRight size={20} />
+            </Button>
+          </div>
+        )}
       </div>
 
-      {!currentLog && !isEditing ? (
+      {viewMode === 'history' ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <AnimatePresence>
+            {logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => (
+              <motion.div
+                key={log.id}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                whileHover={{ y: -5 }}
+                className="cursor-pointer"
+                onClick={() => {
+                  setCurrentDate(log.date);
+                  setViewMode('daily');
+                }}
+              >
+                <Card className="rounded-[2rem] border-none shadow-xl hover:shadow-2xl transition-all overflow-hidden bg-white h-full border-t-4 border-t-primary">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none px-3 py-1">
+                        Informe #{log.reportNumber}
+                      </Badge>
+                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                        {format(parseISO(log.date), 'dd/MM/yyyy')}
+                      </span>
+                    </div>
+                    <h3 className="text-xl font-bold text-neutral-900 mb-2 truncate">{log.project}</h3>
+                    <p className="text-sm text-neutral-500 mb-6 line-clamp-1">{log.workAddress}</p>
+                    
+                    <div className="flex items-center justify-between py-3 border-t border-neutral-50">
+                      <div className="flex items-center gap-2">
+                        <Users size={14} className="text-neutral-400" />
+                        <span className="text-xs font-bold text-neutral-600">{log.personnel.length} Pers.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <TrendingUp size={14} className="text-emerald-500" />
+                        <span className="text-xs font-bold text-emerald-600">{log.advancePercentage}% Avance</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+          {logs.length === 0 && (
+            <div className="col-span-full py-24 text-center">
+              <div className="p-6 bg-neutral-100 rounded-full w-fit mx-auto text-neutral-300 mb-4">
+                <History size={48} />
+              </div>
+              <p className="text-neutral-500 font-medium">No se encontraron reportes previos.</p>
+              <Button variant="link" onClick={() => setViewMode('daily')} className="mt-2 text-primary font-bold">
+                Crear el primer reporte
+              </Button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
+          {!currentLog && !isEditing ? (
         <Card className="rounded-[2.5rem] border-dashed border-2 border-neutral-200 bg-neutral-50/50">
           <CardContent className="py-24 flex flex-col items-center justify-center gap-6">
             <div className="p-6 bg-white rounded-full shadow-lg text-neutral-300">
@@ -1182,6 +1266,8 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
           </div>
         </div>
       )}
+    </>
+  )}
 
       <Dialog open={cameraOpen} onOpenChange={setCameraOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl overflow-hidden border-none shadow-2xl">

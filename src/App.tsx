@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles } from 'lucide-react';
+import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw } from 'lucide-react';
 import Scanner from './components/Scanner';
 import UserManagement from './components/UserManagement';
 import AttendanceHistory from './components/AttendanceHistory';
@@ -18,7 +18,7 @@ import WishList from './components/WishList';
 import { User, AttendanceLog, InventoryMovement, WorkLog, WishListItem } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
-import { doc, getDocFromServer } from 'firebase/firestore';
+import { doc, getDoc, enableNetwork } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
@@ -37,6 +37,8 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktop, setIsDesktop] = useState(typeof window !== 'undefined' ? window.innerWidth >= 768 : true);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   useEffect(() => {
     const handleResize = () => {
@@ -45,7 +47,27 @@ export default function App() {
       if (desktop) setIsMobileMenuOpen(false);
     };
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+
+    const handleOnline = () => {
+      console.log("Browser went online");
+      toast.success("Conexión restablecida");
+      setIsOnline(true);
+      enableNetwork(db).catch(console.error);
+    };
+    const handleOffline = () => {
+      console.log("Browser went offline");
+      toast.error("Sin conexión a internet");
+      setIsOnline(false);
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   const menuItems = [
@@ -61,10 +83,14 @@ export default function App() {
   useEffect(() => {
     async function testConnection() {
       try {
-        await getDocFromServer(doc(db, 'test', 'connection'));
+        await enableNetwork(db);
+        const testDoc = await getDoc(doc(db, 'test', 'connection'));
+        console.log("Firebase connection status:", testDoc.exists() ? "OK" : "OK (New DB)");
+        setIsOnline(true);
       } catch (error) {
-        if(error instanceof Error && error.message.includes('the client is offline')) {
-          console.error("Please check your Firebase configuration.");
+        setIsOnline(false);
+        if(error instanceof Error) {
+          console.warn("Initial connection check failed, will retry implicitly:", error.message);
         }
       }
     }
@@ -73,6 +99,9 @@ export default function App() {
     async function init() {
       try {
         await faceService.loadModels();
+        // Wait a bit more for Firestore to settle with long polling
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
         const [usersData, logsData, movementsData, workLogsData, wishlistData] = await Promise.all([
           firestoreService.getAll<User>('users'),
           firestoreService.getAll<AttendanceLog>('attendance'),
@@ -96,18 +125,31 @@ export default function App() {
   }, []);
 
   const refreshData = async () => {
-    const [usersData, logsData, movementsData, workLogsData, wishlistData] = await Promise.all([
-      firestoreService.getAll<User>('users'),
-      firestoreService.getAll<AttendanceLog>('attendance'),
-      firestoreService.getAll<InventoryMovement>('inventoryMovements'),
-      firestoreService.getAll<WorkLog>('workLogs'),
-      firestoreService.getAll<WishListItem>('wishlist')
-    ]);
-    setUsers(usersData);
-    setLogs(logsData);
-    setMovements(movementsData);
-    setWorkLogs(workLogsData);
-    setWishlistItems(wishlistData);
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      const [usersData, logsData, movementsData, workLogsData, wishlistData] = await Promise.all([
+        firestoreService.getAll<User>('users'),
+        firestoreService.getAll<AttendanceLog>('attendance'),
+        firestoreService.getAll<InventoryMovement>('inventoryMovements'),
+        firestoreService.getAll<WorkLog>('workLogs'),
+        firestoreService.getAll<WishListItem>('wishlist')
+      ]);
+      setUsers(usersData);
+      setLogs(logsData);
+      setMovements(movementsData);
+      setWorkLogs(workLogsData);
+      setWishlistItems(wishlistData);
+      setIsOnline(true);
+      if (activeView !== 'home') toast.success('Datos actualizados');
+    } catch (e) {
+      console.error('Refresh error:', e);
+      setIsOnline(false);
+      toast.error('Error de sincronización');
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   if (loading) {
@@ -255,10 +297,22 @@ export default function App() {
             </h2>
           </div>
           <div className="flex items-center gap-4">
-             <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-full">
-                <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">Sistema Activo</span>
-             </div>
+            <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-full">
+              <div className={cn("w-2 h-2 rounded-full", isOnline ? "bg-emerald-500 animate-pulse" : "bg-rose-500")}></div>
+              <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-tighter">
+                {isOnline ? 'Sistema Online' : 'Sistema Offline'}
+              </span>
+            </div>
+            
+            <Button 
+              variant="outline" 
+              size="icon" 
+              className={cn("rounded-xl h-10 w-10 shrink-0 transition-all", isRefreshing && "animate-spin text-primary")} 
+              onClick={refreshData}
+              disabled={isRefreshing}
+            >
+              <RefreshCw size={18} />
+            </Button>
           </div>
         </header>
 

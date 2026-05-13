@@ -59,9 +59,9 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
           return;
         }
 
-        // Only process every 5th frame to save CPU
+        // Only process every 2nd frame to save CPU while maintaining speed
         frameCount++;
-        if (frameCount % 6 !== 0) {
+        if (frameCount % 2 !== 0) {
           animationFrameId = requestAnimationFrame(scan);
           return;
         }
@@ -76,6 +76,37 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
         try {
           const results = await faceService.recognizeFace(videoRef.current, matcher);
           
+          // Draw detection boxes on canvas for visual feedback
+          if (canvasRef.current && videoRef.current) {
+            const canvas = canvasRef.current;
+            const video = videoRef.current;
+            
+            // Match dimensions and resize results for the current display size
+            const displaySize = { width: video.offsetWidth, height: video.offsetHeight };
+            faceapi.matchDimensions(canvas, displaySize);
+            const resizedResults = faceapi.resizeResults(results, displaySize);
+            
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              resizedResults.forEach(result => {
+                const box = result.box;
+                ctx.strokeStyle = '#0ea5e9'; // primary color
+                ctx.lineWidth = 3;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+                
+                // Draw label if matched
+                if (result.label !== 'unknown') {
+                  ctx.fillStyle = '#0ea5e9';
+                  ctx.font = 'bold 16px sans-serif';
+                  const user = users.find(u => u.id === result.label);
+                  const name = user ? user.name : result.label;
+                  ctx.fillText(name, box.x, box.y > 25 ? box.y - 10 : 25);
+                }
+              });
+            }
+          }
+
           if (results.length > 0 && isScanning) {
             const bestMatch = results[0];
             // Threshold is already applied in matcher, but we check distance here for extra safety
@@ -122,6 +153,13 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
       cancelAnimationFrame(animationFrameId);
     };
   }, [users, isScanning, restartKey]);
+
+  useEffect(() => {
+    if (recognizedUser && canvasRef.current) {
+      const ctx = canvasRef.current.getContext('2d');
+      ctx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
+  }, [recognizedUser]);
 
   const handleRestartCamera = () => {
     setRestartKey(prev => prev + 1);
@@ -181,6 +219,10 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
             muted
             playsInline
             className="w-full h-full object-cover grayscale-[0.5] -scale-x-100"
+          />
+          <canvas
+            ref={canvasRef}
+            className="absolute inset-0 w-full h-full object-cover -scale-x-100 pointer-events-none"
           />
           <div className="absolute top-4 right-4 z-10">
             <Button 

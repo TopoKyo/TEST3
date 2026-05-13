@@ -4,6 +4,8 @@ import {
   doc, 
   getDoc, 
   getDocs, 
+  getDocsFromCache,
+  getDocFromCache,
   setDoc, 
   updateDoc, 
   deleteDoc, 
@@ -62,22 +64,58 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 }
 
 export const firestoreService = {
-  async getAll<T>(collectionPath: string): Promise<T[]> {
+  async getAll<T>(collectionPath: string, retries = 3): Promise<T[]> {
     try {
       const snap = await getDocs(collection(db, collectionPath));
       return snap.docs.map(doc => doc.data() as T);
     } catch (error) {
+      if (error instanceof Error && (error.message.includes('offline') || error.message.includes('network'))) {
+        // Fallback to cache since we are offline
+        try {
+          const cacheSnap = await getDocsFromCache(collection(db, collectionPath));
+          if (!cacheSnap.empty) {
+            console.log(`[Firestore] Returning ${cacheSnap.size} items from cache for ${collectionPath}`);
+            return cacheSnap.docs.map(doc => doc.data() as T);
+          }
+        } catch (cacheError) {
+          console.error("[Firestore] Cache read failed:", cacheError);
+        }
+
+        if (retries > 0) {
+          console.warn(`[Firestore] getAll failed (offline), retrying... (${retries} left)`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          return firestoreService.getAll<T>(collectionPath, retries - 1);
+        }
+      }
       handleFirestoreError(error, OperationType.LIST, collectionPath);
       return [];
     }
   },
 
-  async getOne<T>(collectionPath: string, id: string): Promise<T | null> {
+  async getOne<T>(collectionPath: string, id: string, retries = 3): Promise<T | null> {
     try {
       const docRef = doc(db, collectionPath, id);
       const snap = await getDoc(docRef);
       return snap.exists() ? (snap.data() as T) : null;
     } catch (error) {
+      if (error instanceof Error && (error.message.includes('offline') || error.message.includes('network'))) {
+        // Fallback to cache
+        try {
+          const cacheSnap = await getDocFromCache(doc(db, collectionPath, id));
+          if (cacheSnap.exists()) {
+            console.log(`[Firestore] Returning item from cache for ${collectionPath}/${id}`);
+            return cacheSnap.data() as T;
+          }
+        } catch (cacheError) {
+          console.error("[Firestore] Cache read failed:", cacheError);
+        }
+
+        if (retries > 0) {
+          console.warn(`[Firestore] getOne failed (offline), retrying... (${retries} left)`);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          return firestoreService.getOne<T>(collectionPath, id, retries - 1);
+        }
+      }
       handleFirestoreError(error, OperationType.GET, `${collectionPath}/${id}`);
       return null;
     }

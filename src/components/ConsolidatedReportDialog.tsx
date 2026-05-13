@@ -195,9 +195,12 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
     
     // Add Logo
     try {
-      const logoData = await getBase64ImageFromURL('/logo.png');
+      const logoUrl = `${window.location.origin}/logo.png`;
+      const logoData = await getBase64ImageFromURL(logoUrl);
       doc.addImage(logoData, 'PNG', 15, 12, 40, 20);
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Logo could not be loaded for PDF', e);
+    }
 
     // Title & Header
     doc.setFontSize(22);
