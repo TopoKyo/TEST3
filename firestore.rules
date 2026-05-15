@@ -12,44 +12,8 @@ service cloud.firestore {
 
     // --- Collections ---
     // We are using loose rules for now as the app is in development and has no auth flow.
-    // However, we still have individual match blocks for future hardening.
-
-    match /settings/{settingId} {
-      allow read, write: if true;
-    }
-
-    match /users/{userId} {
-      allow read, write: if true;
-    }
-
-    match /attendance/{logId} {
-      allow read, write: if true;
-    }
-
-    match /products/{productId} {
-      allow read, write: if true;
-    }
-
-    match /inventoryMovements/{movId} {
-      allow read, write: if true;
-    }
-
-    match /workLogs/{logId} {
-      allow read, write: if true;
-    }
-
-    match /wishlist/{itemId} {
-      allow read, write: if true;
-    }
-    
-    // Test match
-    match /test/connection {
-      allow get: if true;
-    }
-
-    // Default deny for anything else
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

@@ -144,3 +144,37 @@ export interface ProjectContext {
   generalDescription: string;
   updatedAt: string;
 }
+
+export type SkillCategory = 
+  | 'puntualidad'
+  | 'trabajo_equipo'
+  | 'seguridad_industrial'
+  | 'comunicacion'
+  | 'iniciativa'
+  | 'productividad'
+  | 'limpieza_orden';
+
+export const SKILL_LABELS: Record<SkillCategory, string> = {
+  puntualidad: 'Puntualidad y Asistencia',
+  trabajo_equipo: 'Trabajo en Equipo',
+  seguridad_industrial: 'Seguridad Industrial',
+  comunicacion: 'Comunicación Efectiva',
+  iniciativa: 'Iniciativa y Proactividad',
+  productividad: 'Productividad y Calidad',
+  limpieza_orden: 'Orden y Limpieza'
+};
+
+export interface SkillEvaluation {
+  id: string;
+  userId: string;
+  userName: string;
+  supervisorId: string;
+  supervisorName: string;
+  date: string;
+  scores: Record<SkillCategory, number>; // 1-5 scale
+  average: number;
+  positiveObservations: string;
+  negativeObservations: string;
+  generalComments: string;
+  timestamp: string;
+}

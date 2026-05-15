@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw } from 'lucide-react';
+import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw, Award } from 'lucide-react';
 import Scanner from './components/Scanner';
 import UserManagement from './components/UserManagement';
 import AttendanceHistory from './components/AttendanceHistory';
@@ -15,6 +15,8 @@ import InventoryManagement from './components/InventoryManagement';
 import DailyLog from './components/DailyLog';
 import Dashboard from './components/Dashboard';
 import WishList from './components/WishList';
+import { SoftSkillsForm } from './components/SoftSkillsForm';
+import { SoftSkillsReport } from './components/SoftSkillsReport';
 import { User, AttendanceLog, InventoryMovement, WorkLog, WishListItem } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
@@ -24,7 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -78,6 +80,8 @@ export default function App() {
     { id: 'inventory', label: 'Inventario', icon: Package },
     { id: 'wishlist', label: 'Pendientes', icon: Sparkles },
     { id: 'worklogs', label: 'Bitácora de Obra', icon: ClipboardList },
+    { id: 'evaluations', label: 'Habilidades Blandas', icon: Award },
+    { id: 'skill-reports', label: 'Informes de Personal', icon: FileBarChart },
   ];
 
   useEffect(() => {
@@ -179,6 +183,8 @@ export default function App() {
       case 'inventory': return <InventoryManagement users={users} onUpdate={refreshData} />;
       case 'worklogs': return <DailyLog users={users} attendanceLogs={logs} />;
       case 'wishlist': return <WishList users={users} />;
+      case 'evaluations': return <SoftSkillsForm users={users} />;
+      case 'skill-reports': return <SoftSkillsReport users={users} />;
       default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
     }
   };

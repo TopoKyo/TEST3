@@ -113,6 +113,26 @@
         "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "name"]
+    },
+    "SkillEvaluation": {
+      "title": "SkillEvaluation",
+      "description": "Daily soft skills evaluation for operators.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "supervisorId": { "type": "string" },
+        "supervisorName": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "scores": { "type": "object" },
+        "average": { "type": "number" },
+        "positiveObservations": { "type": "string" },
+        "negativeObservations": { "type": "string" },
+        "generalComments": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "userName", "supervisorId", "supervisorName", "date", "scores", "average", "timestamp"]
     }
   },
   "firestore": {
@@ -143,6 +163,10 @@
     "settings": {
       "schema": "ProjectContext",
       "description": "Global application and project settings."
+    },
+    "skillEvaluations": {
+      "schema": "SkillEvaluation",
+      "description": "Collection of daily personnel evaluations."
     }
   }
 }

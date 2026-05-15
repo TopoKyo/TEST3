@@ -64,18 +64,28 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
 
     if (users.length > 0) {
       const matcher = faceService.createMatcher(users.map(u => ({ name: u.id, descriptor: u.faceDescriptor })));
+      let lastActivityTime = Date.now();
 
       const loop = async (time: number) => {
-        if (!isActive || !isScanning || !videoRef.current || !matcher) {
-          animationFrameId = requestAnimationFrame(loop);
+        if (!isActive) return;
+        
+        // Always schedule next frame first to ensure loop resilience
+        // But we guard it to prevent multiple concurrent processing runs
+        animationFrameId = requestAnimationFrame(loop);
+
+        if (!isScanning || !videoRef.current || !matcher) {
           return;
         }
 
         if (time - lastProcessTime > FRAME_INTERVAL) {
           lastProcessTime = time;
+          lastActivityTime = Date.now(); // Update watchdog
           const startTime = performance.now();
           
           try {
+            // Check if video is actually playing/not stuck
+            if (videoRef.current.paused || videoRef.current.ended) return;
+
             const results = await faceService.recognizeFace(videoRef.current, matcher);
             const latency = performance.now() - startTime;
             setDebugInfo(prev => ({ fps: Math.round(1000 / (performance.now() - startTime)), latency: Math.round(latency) }));
@@ -163,13 +173,27 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
             }
           } catch (error) {
             console.error("Frame error:", error);
+            // On error, the loop continues because of the animationFrameId at top
           }
         }
-        
-        animationFrameId = requestAnimationFrame(loop);
       };
 
+      // Watchdog interval
+      const watchdogInterval = setInterval(() => {
+        if (isActive && isScanning && Date.now() - lastActivityTime > 3000) {
+          console.warn("Scanner appears stuck, auto-restarting...");
+          handleRestartCamera();
+        }
+      }, 4000);
+
       animationFrameId = requestAnimationFrame(loop);
+
+      return () => {
+        isActive = false;
+        clearInterval(watchdogInterval);
+        stream?.getTracks().forEach(t => t.stop());
+        cancelAnimationFrame(animationFrameId);
+      };
     }
 
     return () => {
