@@ -46,6 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { firestoreService } from '@/src/lib/firestoreService';
+import { geminiService, getApiKey, saveApiKey } from '@/src/lib/geminiService';
 import { User, WorkLog, WeeklyReport, WeeklyReportTask, WeeklyReportIncident } from '@/src/types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -86,9 +87,30 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
   const [newIncidentImpact, setNewIncidentImpact] = useState('');
   const [newIncidentCorrective, setNewIncidentCorrective] = useState('');
 
+  // Zoom/Full-screen observations editor modal state
+  const [activeObsTask, setActiveObsTask] = useState<WeeklyReportTask | null>(null);
+  const [tempObservations, setTempObservations] = useState<string>('');
+
+  const handleOpenObservationsModal = (task: WeeklyReportTask) => {
+    setActiveObsTask(task);
+    setTempObservations(task.observations || '');
+  };
+
+  const handleSaveObservations = () => {
+    if (activeObsTask) {
+      handleUpdateTaskField(activeObsTask.id, 'observations', tempObservations);
+      setActiveObsTask(null);
+      toast.success("Observaciones actualizadas.");
+    }
+  };
+
   // AI Gen States
   const [generatingWithAI, setGeneratingWithAI] = useState(false);
   const [generatedAIPayload, setGeneratedAIPayload] = useState<WeeklyReport['aiSummary'] | null>(null);
+
+  // Custom API key modal state for browser fallback users
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
+  const [customApiKey, setCustomApiKey] = useState('');
 
   // General Report State
   const [loadingTasks, setLoadingTasks] = useState(false);
@@ -306,68 +328,46 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
 
     setGeneratingWithAI(true);
     try {
-      const response = await fetch("/api/weekly-report/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          metadata: {
-            weekLabel,
-            startDate,
-            endDate,
-            area: selectedArea,
-            project: selectedProject,
-            responsibleName
-          },
-          tasks: selectedTasks.map(t => ({
-            name: t.name,
-            responsible: t.responsible,
-            status: t.status,
-            hours: t.hours,
-            priority: t.priority,
-            observations: t.observations
-          })),
-          incidents: selectedIncidents.map(i => ({
-            description: i.description,
-            gravity: i.gravity,
-            impact: i.impact,
-            correctiveAction: i.correctiveAction,
-            responsible: i.responsible,
-            date: i.date
-          }))
-        })
-      });
+      const payloadMetadata = {
+        weekLabel,
+        startDate,
+        endDate,
+        area: selectedArea,
+        project: selectedProject,
+        responsibleName
+      };
 
-      if (!response.ok) {
-        let errMsg = `Error del servidor (Código ${response.status})`;
-        try {
-          const contentType = response.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const errorJson = await response.json();
-            errMsg = errorJson.error || errMsg;
-          } else {
-            const errorText = await response.text();
-            if (errorText) {
-              // Strip HTML tags if any
-              errMsg = errorText.replace(/<[^>]*>/g, '').substring(0, 150) || errMsg;
-            }
-          }
-        } catch (e) {
-          // ignore parsing error
-        }
-        throw new Error(errMsg);
-      }
+      const payloadTasks = selectedTasks.map(t => ({
+        name: t.name,
+        responsible: t.responsible,
+        status: t.status,
+        hours: t.hours,
+        priority: t.priority,
+        observations: t.observations
+      }));
 
-      let parsedJSON;
-      try {
-        parsedJSON = await response.json();
-      } catch (e) {
-        throw new Error("El servidor de IA devolvió una respuesta que no es JSON válido.");
-      }
+      const payloadIncidents = selectedIncidents.map(i => ({
+        description: i.description,
+        gravity: i.gravity,
+        impact: i.impact,
+        correctiveAction: i.correctiveAction,
+        responsible: i.responsible,
+        date: i.date
+      }));
+
+      const parsedJSON = await geminiService.generateWeeklyReport(payloadMetadata, payloadTasks, payloadIncidents);
+      
       setGeneratedAIPayload(parsedJSON);
       toast.success("Resumen Inteligente generado con éxito por Gemini 3.5-Flash.");
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      toast.error(error instanceof Error ? error.message : "Error al conectar con la generación de informe de IA.");
+      if (error && error.message === "API_KEY_REQUIRED") {
+        setCustomApiKey(getApiKey() || '');
+        setApiKeyModalOpen(true);
+        toast.info("Por favor, configure su API Key de Gemini para generar el informe desde su dominio / Vercel.");
+      } else {
+        toast.error(error instanceof Error ? error.message : "Error al conectar con la generación de informe de IA.");
+      }
     } finally {
       setGeneratingWithAI(false);
     }
@@ -1287,14 +1287,33 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                               </select>
                             </td>
                             <td className="p-3">
-                              <input 
-                                type="text"
-                                placeholder="..."
-                                disabled={!task.selected}
-                                value={task.observations}
-                                onChange={(e) => handleUpdateTaskField(task.id, 'observations', e.target.value)}
-                                className="w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-0.5 text-zinc-700"
-                              />
+                              <div className="relative flex items-center gap-1.5 w-full min-w-[220px]">
+                                <input 
+                                  type="text"
+                                  placeholder="Generar o escribir..."
+                                  readOnly
+                                  disabled={!task.selected}
+                                  value={task.observations}
+                                  onClick={() => {
+                                    if (task.selected) {
+                                      handleOpenObservationsModal(task);
+                                    }
+                                  }}
+                                  className={cn(
+                                    "w-full bg-zinc-50 border border-zinc-200 rounded px-2 py-1 text-zinc-700 select-none cursor-pointer text-xs truncate transition-all pr-8",
+                                    task.selected ? "hover:border-indigo-400 hover:bg-zinc-100/50" : "opacity-50 cursor-not-allowed"
+                                  )}
+                                />
+                                <button
+                                  type="button"
+                                  disabled={!task.selected}
+                                  onClick={() => handleOpenObservationsModal(task)}
+                                  className="absolute right-1 text-zinc-400 hover:text-indigo-600 p-1 rounded-md hover:bg-zinc-200 transition disabled:opacity-40 cursor-pointer"
+                                  title="Editar observaciones cómodamente"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -2070,6 +2089,135 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                 Agregar Incidencia
               </button>
             </form>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Spacious Observations Zoom/Edit Modal */}
+      {activeObsTask && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-6 shadow-2xl max-w-lg w-full border border-zinc-150 flex flex-col gap-4 text-zinc-900"
+          >
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest font-mono">
+                  Observaciones de la Actividad
+                </span>
+                <h3 className="font-black text-zinc-900 text-sm mt-0.5 line-clamp-1">
+                  {activeObsTask.name}
+                </h3>
+              </div>
+              <button 
+                onClick={() => setActiveObsTask(null)}
+                className="text-zinc-400 hover:text-zinc-650 cursor-pointer p-1 rounded-full hover:bg-zinc-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block font-mono">
+                Escribir Observaciones / Notas de Obra
+              </label>
+              <textarea
+                placeholder="Indique cualquier comentario, retraso constructivo, avance particular, contratiempos, retrasos con subcontratistas, etc. de esta tarea..."
+                value={tempObservations}
+                onChange={(e) => setTempObservations(e.target.value)}
+                className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 min-h-[160px] leading-relaxed resize-y"
+                rows={6}
+                autoFocus
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setActiveObsTask(null)}
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveObservations}
+                className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Guardar Observaciones
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {/* Configure Gemini API Key Fallback Modal */}
+      {apiKeyModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-6 shadow-2xl max-w-md w-full border border-zinc-150 flex flex-col gap-4 text-zinc-900"
+          >
+            <div className="flex justify-between items-center border-b border-zinc-100 pb-3">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest font-mono">
+                  Configuración Externa (Vercel)
+                </span>
+                <h3 className="font-black text-zinc-900 text-sm mt-0.5">
+                  Establecer API Key de Gemini
+                </h3>
+              </div>
+              <button 
+                onClick={() => setApiKeyModalOpen(false)}
+                className="text-zinc-400 hover:text-zinc-650 cursor-pointer p-1 rounded-full hover:bg-zinc-100 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-zinc-500 leading-relaxed">
+              En dominios externos como <strong>Vercel</strong>, el servidor proxy de IA de Google AI Studio no está disponible.
+              Para utilizar la generación de informes con IA Gemini, proporcione su propia API Key de Gemini. Se guardará de forma local segura en su navegador.
+            </p>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block font-mono">
+                Gemini API Key
+              </label>
+              <input
+                type="password"
+                placeholder="AIzaSy..."
+                value={customApiKey}
+                onChange={(e) => setCustomApiKey(e.target.value)}
+                className="w-full text-xs bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-3 text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 font-mono"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-2 border-t border-zinc-100">
+              <button
+                type="button"
+                onClick={() => setApiKeyModalOpen(false)}
+                className="px-4 py-2 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  saveApiKey(customApiKey);
+                  setApiKeyModalOpen(false);
+                  toast.success("API Key de Gemini guardada de forma local exitosamente.");
+                  handleGenerateAIReport();
+                }}
+                className="px-5 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-sm"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Guardar y Generar Informe
+              </button>
+            </div>
           </motion.div>
         </div>
       )}
