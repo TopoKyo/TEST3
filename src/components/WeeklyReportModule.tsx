@@ -1380,8 +1380,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                 <section className="bg-white border-2 border-indigo-500/20 rounded-2xl p-6 shadow-md flex flex-col gap-6">
                   <div className="flex items-center justify-between border-b border-indigo-100 pb-3">
                     <div className="flex items-center gap-2 text-indigo-600 font-black text-base tracking-wider uppercase">
-                      <Sparkles className="w-5 h-5 text-indigo-500" />
-                      <span>SÍNTESIS GENERADA CON IA GEMINI</span>
+                      <FileCheck className="w-5 h-5 text-indigo-500" />
+                      <span>SÍNTESIS DEL INFORME (EDITABLE)</span>
                     </div>
 
                     <span className={cn(
@@ -1398,37 +1398,84 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                   {/* Executive Summary detail */}
                   <div className="flex flex-col gap-1.5">
                     <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">Resumen Ejecutivo</h4>
-                    <p className="text-sm text-zinc-855 leading-relaxed bg-zinc-50 p-4 rounded-xl border border-zinc-100">
-                      {generatedAIPayload.executiveSummary}
-                    </p>
+                    <textarea
+                      value={generatedAIPayload.executiveSummary}
+                      onChange={(e) => setGeneratedAIPayload({ ...generatedAIPayload, executiveSummary: e.target.value })}
+                      className="w-full text-sm text-zinc-800 leading-relaxed bg-zinc-50 p-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                      rows={4}
+                      placeholder="Redacte el resumen ejecutivo aquí..."
+                    />
                   </div>
 
                   {/* Complicance & analysis */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div className="md:col-span-2 flex flex-col gap-1.5">
                       <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">Análisis de Cumplimiento</h4>
-                      <p className="text-xs text-zinc-600 bg-zinc-50 p-4 rounded-xl border border-zinc-100 leading-relaxed min-h-[90px]">
-                        {generatedAIPayload.generalProgressAnalysis}
-                      </p>
+                      <textarea
+                        value={generatedAIPayload.generalProgressAnalysis}
+                        onChange={(e) => setGeneratedAIPayload({ ...generatedAIPayload, generalProgressAnalysis: e.target.value })}
+                        className="w-full text-xs text-zinc-600 bg-zinc-50 p-3 rounded-xl border border-zinc-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                        rows={3}
+                        placeholder="Redacte el análisis de progreso y cumplimiento aquí..."
+                      />
                     </div>
 
-                    <div className="bg-indigo-50/50 border border-indigo-120/40 rounded-xl p-5 flex flex-col items-center justify-center text-center">
-                      <TrendingUp className="w-6 h-6 text-indigo-600 mb-1" />
-                      <span className="text-lg font-black text-indigo-950 uppercase tracking-widest leading-none mb-1.5 mt-1">
-                        {generatedAIPayload.suggestedStatus || 'Estándar'}
-                      </span>
-                      <span className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider font-mono">Desempeño Recomendado IA</span>
+                    <div className="bg-indigo-50/50 border border-indigo-120/40 rounded-xl p-4 flex flex-col items-center justify-center text-center gap-2">
+                      <TrendingUp className="w-5 h-5 text-indigo-600" />
+                      <span className="text-[10px] uppercase font-bold text-indigo-500 tracking-wider font-mono">Estatus del Periodo</span>
+                      <select
+                        value={generatedAIPayload.suggestedStatus}
+                        onChange={(e) => setGeneratedAIPayload({ ...generatedAIPayload, suggestedStatus: e.target.value as any })}
+                        className="bg-white border border-indigo-200 text-indigo-950 text-xs font-black rounded-lg p-1.5 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full"
+                      >
+                        <option value="Excelente">Excelente</option>
+                        <option value="Bueno">Bueno</option>
+                        <option value="Regular">Regular</option>
+                        <option value="Crítico">Crítico</option>
+                      </select>
                     </div>
                   </div>
 
                   {/* Recommendations */}
                   <div className="flex flex-col gap-2.5">
-                    <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">Recomendaciones Correctivas Previstas</h4>
+                    <div className="flex justify-between items-center">
+                      <h4 className="text-xs font-bold text-zinc-400 uppercase tracking-widest font-mono">Recomendaciones Correctivas</h4>
+                      <button
+                        onClick={() => {
+                          const updatedRecs = [...(generatedAIPayload.recommendations || []), ""];
+                          setGeneratedAIPayload({ ...generatedAIPayload, recommendations: updatedRecs });
+                        }}
+                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-500 flex items-center gap-1 bg-indigo-50 px-2.5 py-1.5 rounded-lg transition"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Añadir Recomendación
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {generatedAIPayload.recommendations.map((rec, i) => (
-                        <div key={i} className="flex gap-2.5 p-3 rounded-lg bg-zinc-100 bg-opacity-40 border border-zinc-100 text-xs text-zinc-700">
-                          <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5 font-bold" />
-                          <span>{rec}</span>
+                      {(generatedAIPayload.recommendations || []).map((rec, i) => (
+                        <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-zinc-50 border border-zinc-200 text-xs text-zinc-700">
+                          <Check className="w-4 h-4 text-emerald-600 shrink-0 font-bold" />
+                          <input
+                            type="text"
+                            value={rec}
+                            onChange={(e) => {
+                              const updatedRecs = [...generatedAIPayload.recommendations];
+                              updatedRecs[i] = e.target.value;
+                              setGeneratedAIPayload({ ...generatedAIPayload, recommendations: updatedRecs });
+                            }}
+                            className="bg-transparent border-none focus:outline-none w-full text-xs text-zinc-700 font-medium"
+                            placeholder="Describa la recomendación..."
+                          />
+                          <button
+                            onClick={() => {
+                              const updatedRecs = generatedAIPayload.recommendations.filter((_, idx) => idx !== i);
+                              setGeneratedAIPayload({ ...generatedAIPayload, recommendations: updatedRecs });
+                            }}
+                            className="text-zinc-400 hover:text-rose-500 px-1 transition"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -1553,18 +1600,38 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                       ) : (
                         <>
                           <Sparkles className="w-4 h-4 text-indigo-650" />
-                          <span>Generar Informe Semanal con IA</span>
+                          <span>Generar con IA Gemini</span>
                         </>
                       )}
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setGeneratedAIPayload({
+                          executiveSummary: "Resumen ejecutivo elaborado de forma manual. Describa aquí los hitos principales de la semana.",
+                          generalProgressAnalysis: `Durante la semana se completaron ${completedTasksCount} de ${selectedTasksCount} actividades estipuladas en obra, alcanzando un progreso de cumplimiento del ${compliancePercentage}%.`,
+                          progressPercentage: compliancePercentage,
+                          recommendations: [
+                            "Optimizar la asignación de materiales y de frentes de obra.",
+                            "Mantener el control e inspección rutinaria de seguridad en las áreas de trabajo."
+                          ],
+                          suggestedStatus: (productivityScore >= 85 ? 'Excelente' : productivityScore >= 70 ? 'Bueno' : productivityScore >= 50 ? 'Regular' : 'Crítico')
+                        });
+                        toast.success("Se abrió el editor de síntesis manual de forma exitosa.");
+                      }}
+                      className="w-full bg-zinc-800 hover:bg-zinc-700 text-xs font-bold text-white py-2.5 rounded-xl flex items-center justify-center gap-1.5 transition cursor-pointer border border-zinc-700/30"
+                    >
+                      <FileCheck className="w-3.5 h-3.5 text-indigo-400" />
+                      Redactar Síntesis Manual (Sin IA)
                     </button>
 
                     {/* Pre-save without AI */}
                     <button
                       onClick={handleSaveReportToDatabase}
                       disabled={submittingReport}
-                      className="w-full bg-indigo-800 hover:bg-indigo-750 text-xs font-bold text-indigo-100 py-2 rounded-xl transition"
+                      className="w-full bg-indigo-850 hover:bg-indigo-800 text-xs font-bold text-indigo-100 py-2 rounded-xl transition"
                     >
-                      Guardar Borrador Manual (Sin IA)
+                      Guardar Borrador Rápido (Sin IA)
                     </button>
                   </div>
                 )}
