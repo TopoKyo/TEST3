@@ -213,7 +213,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
               date: log.date,
               responsible: act.operator || (act.operators && act.operators.length > 0 ? act.operators[0] : 'S/R'),
               status: act.status || 'pendiente',
-              hours: 8, // Standard industrial shift
               priority: 'Media',
               observations: '',
               photos: act.image ? [act.image] : [],
@@ -341,7 +340,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
         name: t.name,
         responsible: t.responsible,
         status: t.status,
-        hours: t.hours,
         priority: t.priority,
         observations: t.observations
       }));
@@ -388,7 +386,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
   const totalTasksCount = loadedTasks.length;
   const selectedTasksCount = tasksSelectedOnly.length;
   const completedTasksCount = tasksSelectedOnly.filter(t => t.status === 'listo').length;
-  const totalHoursWorked = tasksSelectedOnly.reduce((acc, t) => acc + Number(t.hours || 0), 0);
   const totalIncidentsCount = loadedIncidents.filter(i => i.selected !== false).length;
 
   const compliancePercentage = selectedTasksCount > 0 
@@ -571,7 +568,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
         doc.setFont("helvetica", "normal");
         doc.setFontSize(8.5);
         doc.setTextColor(75, 85, 99);
-        doc.text(`Fecha: ${t.date || 'S/F'}  |  Estado: ${t.status}  |  Responsable: ${t.responsible}  |  Horas: ${t.hours} hrs  |  Prioridad: ${t.priority}  |  Torre: ${t.tower || 'N/A'}  |  Lado: ${t.side || 'N/A'}`, 15, currentY);
+        doc.text(`Fecha: ${t.date || 'S/F'}  |  Estado: ${t.status}  |  Responsable: ${t.responsible}  |  Prioridad: ${t.priority}  |  Torre: ${t.tower || 'N/A'}  |  Lado: ${t.side || 'N/A'}`, 15, currentY);
         currentY += 5;
 
         if (t.observations) {
@@ -669,30 +666,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
         newY = 20;
       }
 
-      // Recommendations Checklist
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      doc.setTextColor(79, 70, 229);
-      doc.text("5. Recomendaciones de la Supervisión (IA)", 15, newY);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.setTextColor(51, 65, 85);
-
-      const recommendationsList = report.aiSummary?.recommendations || [
-        "Mantener revisiones diarias de seguridad preventiva.",
-        "Monitorear las horas extras de operarios críticos.",
-        "Establecer control redundante del inventario de obra principal."
-      ];
-
-      recommendationsList.forEach((rec, idx) => {
-        const text = `[ ] ${rec}`;
-        const splitRec = doc.splitTextToSize(text, 185);
-        doc.text(splitRec, 15, newY + 8 + (idx * 5));
-      });
-
       // Signature Area
-      const sigY = newY + 40;
+      const sigY = newY + 20;
       doc.setDrawColor(156, 163, 175);
       doc.line(70, sigY + 10, 140, sigY + 10);
       doc.setFont("helvetica", "normal");
@@ -729,12 +704,12 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       XLSX.utils.book_append_sheet(wb, wsSummary, "SINOPSIS GENERAL");
 
       // Tasks Sheet
-      const taskHeaders = [["ID Actividad", "Descripción de Tarea", "Fecha", "Estipulado Responsable", "Estado", "Horas", "Prioridad", "Observaciones"]];
+      const taskHeaders = [["ID Actividad", "Descripción de Tarea", "Fecha", "Estipulado Responsable", "Estado", "Prioridad", "Observaciones"]];
       const taskBody = (report.tasks || []).filter(t => t.selected !== false).map(t => [
-        t.id, t.name, t.date, t.responsible, t.status, t.hours, t.priority, t.observations || ""
+        t.id, t.name, t.date, t.responsible, t.status, t.priority, t.observations || ""
       ]);
       const wsTasks = XLSX.utils.aoa_to_sheet([...taskHeaders, ...taskBody]);
-      XLSX.utils.book_append_sheet(wb, wsTasks, "TAREAS Y HORAS");
+      XLSX.utils.book_append_sheet(wb, wsTasks, "TAREAS");
 
       // Incidents Sheet
       const incidentHeaders = [["Descripción", "Fecha", "Nivel de Gravedad", "Sujeto / Rol", "Acción de Mitigación", "Impacto Estimado"]];
@@ -813,7 +788,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                   <b>Torre:</b> ${t.tower || 'N/A'} &nbsp;|&nbsp;
                   <b>Lado:</b> ${t.side || 'N/A'} &nbsp;|&nbsp;
                   <b>Responsable:</b> ${t.responsible} &nbsp;|&nbsp;
-                  <b>Horas:</b> ${t.hours} hs &nbsp;|&nbsp;
                   <b>Prioridad:</b> ${t.priority}
                 </p>
                 ${t.observations ? `<p class="meta-text" style="font-style: italic;"><b>Observaciones:</b> ${t.observations}</p>` : ''}
@@ -1181,8 +1155,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                           <th className="p-3 w-10">Sel</th>
                           <th className="p-3">Actividad / Tarea</th>
                           <th className="p-3 w-28">Responsable</th>
-                          <th className="p-3 w-24">Estado Log</th>
-                          <th className="p-3 w-16">Horas</th>
+                          <th className="p-3 w-28">Estado Log</th>
                           <th className="p-3 w-24">Prioridad</th>
                           <th className="p-3">Observaciones</th>
                         </tr>
@@ -1254,25 +1227,21 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                               </span>
                             </td>
                             <td className="p-3">
-                              <span className={cn(
-                                "px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase",
-                                task.status === 'listo' ? "bg-emerald-100 text-emerald-800" :
-                                task.status === 'en proceso' ? "bg-indigo-100 text-indigo-800" :
-                                "bg-amber-100 text-amber-800"
-                              )}>
-                                {task.status}
-                              </span>
-                            </td>
-                            <td className="p-3">
-                              <input 
-                                type="number"
-                                min={1}
-                                max={24}
+                              <select
+                                value={task.status}
                                 disabled={!task.selected}
-                                value={task.hours}
-                                onChange={(e) => handleUpdateTaskField(task.id, 'hours', Number(e.target.value))}
-                                className="w-12 bg-zinc-50 border border-zinc-200 rounded px-1.5 py-0.5 text-center font-bold text-zinc-700 disabled:opacity-50"
-                              />
+                                onChange={(e) => handleUpdateTaskField(task.id, 'status', e.target.value)}
+                                className={cn(
+                                  "px-2 py-1 rounded-full text-[9px] font-bold uppercase outline-none appearance-none cursor-pointer border border-transparent hover:border-zinc-300 block w-full text-center",
+                                  task.status === 'listo' ? "bg-emerald-100 text-emerald-800" :
+                                  task.status === 'en proceso' ? "bg-indigo-100 text-indigo-800" :
+                                  "bg-amber-100 text-amber-800"
+                                )}
+                              >
+                                <option value="pendiente" className="bg-white text-zinc-900">PENDIENTE</option>
+                                <option value="en proceso" className="bg-white text-zinc-900">EN PROCESO</option>
+                                <option value="listo" className="bg-white text-zinc-900">LISTO</option>
+                              </select>
                             </td>
                             <td className="p-3">
                               <select
@@ -1675,12 +1644,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                     </div>
 
                     <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
-                      <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Horas Hombre</span>
-                      <p className="text-xl font-black text-zinc-800 mt-1">{totalHoursWorked}h</p>
-                      <span className="text-[9px] text-zinc-400">Horas trabajadas</span>
-                    </div>
-
-                    <div className="bg-zinc-50 border border-zinc-100 rounded-xl p-3">
                       <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Desvíos</span>
                       <p className="text-xl font-black text-rose-600 mt-1">{totalIncidentsCount}</p>
                       <span className="text-[9px] text-zinc-400">Incidencias reportadas</span>
@@ -1889,8 +1852,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
 
                               {/* Task Details Row */}
                               <div className="flex flex-wrap items-center gap-3 text-[9px] text-zinc-550 border-t border-dashed border-zinc-200/60 pt-1.5 mt-0.5">
-                                <span><b>Horas:</b> {t.hours} hrs</span>
-                                <span>&bull;</span>
                                 <span><b>Prioridad:</b> {t.priority}</span>
                                 {t.observations && (
                                   <>

@@ -29,8 +29,8 @@ export const geminiService = {
       });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          // Fallback to client-side if server route does not exist (e.g., on Vercel)
+        if (response.status === 404 || response.status === 400) {
+          // Fallback to client-side if server route does not exist or lacks API key
           return await this.generateProgressSummaryClientside(stats, projectContext);
         }
         const errorData = await response.json().catch(() => ({}));
@@ -110,8 +110,8 @@ export const geminiService = {
       });
 
       if (!response.ok) {
-        if (response.status === 404) {
-          // Fallback to client-side if server route does not exist (e.g., on Vercel)
+        if (response.status === 404 || response.status === 400) {
+          // Fallback to client-side if server route does not exist or lacks API key
           return await this.generateWeeklyReportClientside(metadata, tasks, incidents);
         }
         const errorData = await response.json().catch(() => ({}));
@@ -156,7 +156,7 @@ export const geminiService = {
     `;
 
     const prompt = `
-        Analiza detalladamente las tareas, horas de trabajo y las incidencias del siguiente informe y genera la síntesis semanal estructurada en formato JSON:
+        Analiza detalladamente las tareas, y las incidencias del siguiente informe y genera la síntesis semanal estructurada en formato JSON:
 
         SINOPSIS METADATOS:
         - Semana de reporte: ${metadata?.weekLabel || "Semana Actual"}
@@ -174,7 +174,7 @@ export const geminiService = {
         Envía estrictamente un objeto JSON con las siguientes claves. IMPORTANTE: Ningún texto generado debe contener símbolos '%', porcentajes, o fracciones numéricas de avance. Toda la explicación debe basarse en estados textuales y análisis descriptivo de actividades.
         {
           "executiveSummary": "Resumen técnico de la semana operativa, ritmos, logros clave e impacto sin mencionar porcentajes ni cifras de cumplimiento.",
-          "generalProgressAnalysis": "Explicación narrativa descriptiva del progreso general técnico en base a horas empleadas, actividades ejecutadas y contingencias, sin incluir números porcentuales ni símbolos '%'.",
+          "generalProgressAnalysis": "Explicación narrativa descriptiva del progreso general técnico en base a actividades ejecutadas y contingencias, sin incluir números porcentuales ni símbolos '%'.",
           "recommendations": ["Recomendación 1 corregir...", "Recomendación 2 prevenir..."],
           "suggestedStatus": "Uno de estos valores exactamente: Excelente | Bueno | Regular | Crítico"
         }

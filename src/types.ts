@@ -185,7 +185,6 @@ export interface WeeklyReportTask {
   date: string;
   responsible: string;
   status: 'pendiente' | 'en proceso' | 'listo' | string;
-  hours: number;
   priority: 'Baja' | 'Media' | 'Alta';
   observations: string;
   selected: boolean;
