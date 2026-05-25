@@ -338,11 +338,31 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       });
 
       if (!response.ok) {
-        const errorJson = await response.json();
-        throw new Error(errorJson.error || "Falla en los servidores de IA");
+        let errMsg = `Error del servidor (Código ${response.status})`;
+        try {
+          const contentType = response.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const errorJson = await response.json();
+            errMsg = errorJson.error || errMsg;
+          } else {
+            const errorText = await response.text();
+            if (errorText) {
+              // Strip HTML tags if any
+              errMsg = errorText.replace(/<[^>]*>/g, '').substring(0, 150) || errMsg;
+            }
+          }
+        } catch (e) {
+          // ignore parsing error
+        }
+        throw new Error(errMsg);
       }
 
-      const parsedJSON = await response.json();
+      let parsedJSON;
+      try {
+        parsedJSON = await response.json();
+      } catch (e) {
+        throw new Error("El servidor de IA devolvió una respuesta que no es JSON válido.");
+      }
       setGeneratedAIPayload(parsedJSON);
       toast.success("Resumen Inteligente generado con éxito por Gemini 3.5-Flash.");
     } catch (error) {
