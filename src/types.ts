@@ -178,3 +178,54 @@ export interface SkillEvaluation {
   generalComments: string;
   timestamp: string;
 }
+
+export interface WeeklyReportTask {
+  id: string;
+  name: string;
+  date: string;
+  responsible: string;
+  status: 'pendiente' | 'en proceso' | 'listo' | string;
+  hours: number;
+  priority: 'Baja' | 'Media' | 'Alta';
+  observations: string;
+  selected: boolean;
+  photos?: string[];
+  tower?: string;
+  side?: string;
+}
+
+export interface WeeklyReportIncident {
+  id: string;
+  description: string;
+  date: string;
+  impact?: string;
+  correctiveAction?: string;
+  responsible?: string;
+  gravity: 'Baja' | 'Media' | 'Alta' | 'Crítica';
+  selected: boolean;
+  isManual?: boolean;
+}
+
+export interface WeeklyReport {
+  id: string;
+  weekLabel: string;
+  startDate: string;
+  endDate: string;
+  area: string;
+  project: string;
+  responsibleName: string;
+  createdAt: string;
+  createdBy: string;
+  status: 'Excelente' | 'Bueno' | 'Regular' | 'Crítico';
+  aiSummary?: {
+    executiveSummary: string;
+    generalProgressAnalysis: string;
+    progressPercentage: number;
+    recommendations: string[];
+    suggestedStatus: 'Excelente' | 'Bueno' | 'Regular' | 'Crítico';
+  };
+  tasks: WeeklyReportTask[];
+  incidents: WeeklyReportIncident[];
+  productivityScore: number;
+}
+

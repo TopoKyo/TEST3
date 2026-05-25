@@ -3,6 +3,7 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
+import { GoogleGenAI, Type } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -171,6 +172,151 @@ async function startServer() {
     if (products) writeData(PRODUCTS_FILE, products);
     if (movements) writeData(MOVEMENTS_FILE, movements);
     res.json({ status: "success" });
+  });
+
+  // Generación con IA para Informe Semanal Inteligente
+  app.post("/api/weekly-report/generate", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ 
+          error: "La API key de Gemini (GEMINI_API_KEY) no está configurada en los Secrets de la plataforma." 
+        });
+      }
+
+      const { metadata, tasks, incidents } = req.body;
+
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+
+      const systemInstruction = `
+        Actúa como un Supervisor e Ingeniero Industrial Senior.
+        Tu labor es redactar un "Informe Semanal" profesional y riguroso.
+        Analiza las actividades (tareas) completadas e incidencias semanales registradas de manera seria y ejecutiva.
+        Estilo corporativo, sin rodeos de venta ni adjetivos exagerados. Sé claro, asertivo y directo. Idioma de salida: Español.
+        MANDATORIO: No uses porcentajes (%), métricas porcentuales, ni números de cumplimiento en tus descripciones. Redáctalo de manera meramente textual descriptiva.
+      `;
+
+      const prompt = `
+        Analiza detalladamente las tareas, horas de trabajo y las incidencias del siguiente informe y genera la síntesis semanal estructurada en formato JSON:
+
+        SINOPSIS METADATOS:
+        - Semana de reporte: ${metadata?.weekLabel || "Semana Actual"}
+        - Periodo: ${metadata?.startDate || "N/A"} al ${metadata?.endDate || "N/A"}
+        - Proyecto/Área: ${metadata?.area || "Unidad de Producción"}
+        - Supervisor: ${metadata?.responsibleName || "Ing. de Turno"}
+
+        LISTADO DE TAREAS SELECCIONADAS:
+        ${JSON.stringify(tasks, null, 2)}
+
+        INCIDENCIAS O PROBLEMÁTICAS ADJUNTAS:
+        ${JSON.stringify(incidents, null, 2)}
+
+        ESQUEMA DE RESPUESTA JSON MANDATORIO:
+        Envía estrictamente un objeto JSON con las siguientes claves. IMPORTANTE: Ningún texto generado debe contener símbolos '%', porcentajes, o fracciones numéricas de avance. Toda la explicación debe basarse en estados textuales y análisis descriptivo de actividades.
+        {
+          "executiveSummary": "Resumen técnico de la semana operativa, ritmos, logros clave e impacto sin mencionar porcentajes ni cifras de cumplimiento.",
+          "generalProgressAnalysis": "Explicación narrativa descriptiva del progreso general técnico en base a horas empleadas, actividades ejecutadas y contingencias, sin incluir números porcentuales ni símbolos '%'.",
+          "recommendations": ["Recomendación 1 corregir...", "Recomendación 2 prevenir..."],
+          "suggestedStatus": "Uno de estos valores exactamente: Excelente | Bueno | Regular | Crítico"
+        }
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.2,
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              executiveSummary: { type: Type.STRING },
+              generalProgressAnalysis: { type: Type.STRING },
+              recommendations: {
+                type: Type.ARRAY,
+                items: { type: Type.STRING }
+              },
+              suggestedStatus: { type: Type.STRING }
+            },
+            required: ["executiveSummary", "generalProgressAnalysis", "recommendations", "suggestedStatus"]
+          }
+        }
+      });
+
+      const textOutput = response.text || "{}";
+      const resultData = JSON.parse(textOutput);
+      res.json(resultData);
+    } catch (err) {
+      console.error("Gemini Weekly Report generator error:", err);
+      res.status(500).json({ 
+        error: "Incidente al procesar la IA de Gemini: " + (err instanceof Error ? err.message : String(err)) 
+      });
+    }
+  });
+
+  // Generación con IA para Informe Consolidado
+  app.post("/api/consolidated-report/generate", async (req, res) => {
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(400).json({ 
+          error: "La API key de Gemini (GEMINI_API_KEY) no está configurada en los Secrets de la plataforma." 
+        });
+      }
+
+      const { stats, projectContext } = req.body;
+
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3.5-flash",
+        contents: `
+          Actúa como un Ingeniero de Obra Senior y Analista de Proyectos. 
+          Genera un resumen ejecutivo profesional basado en las siguientes estadísticas de bitácora de obra y el contexto técnico del proyecto:
+          
+          CONTEXTO DEL PROYECTO:
+          ${projectContext ? JSON.stringify(projectContext, null, 2) : "No se proporcionó contexto técnico específico."}
+
+          DATOS DE AVANCE RECIENTE:
+          ${JSON.stringify(stats, null, 2)}
+          
+          EL RESUMEN DEBE INCLUIR:
+          1. Estado general del proyecto contrastado con los OBJETIVOS técnicos.
+          2. Análisis del ritmo de avance respecto a las especificaciones mencionadas.
+          3. Principales dificultades detectadas basándose en las incidencias.
+          4. Evaluación de la tendencia de productividad.
+          5. Recomendaciones estratégicas para los próximos días ajustadas al contexto del proyecto.
+          
+          ESTILO:
+          - Profesional, técnico pero claro.
+          - En español.
+          - Máximo 3 párrafos cortos.
+          - No uses Markdown complejo, solo texto plano o guiones simples.
+        `
+      });
+
+      res.json({ text: response.text });
+    } catch (err) {
+      console.error("Gemini Consolidated Report error:", err);
+      res.status(500).json({ 
+        error: "Error al generar el análisis de IA: " + (err instanceof Error ? err.message : String(err)) 
+      });
+    }
   });
 
   // Vite middleware for development

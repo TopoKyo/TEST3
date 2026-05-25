@@ -63,6 +63,30 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
+function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return null as any;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item)) as any;
+  }
+  if (typeof obj === 'object') {
+    const proto = Object.getPrototypeOf(obj);
+    if (proto !== null && proto !== Object.prototype) {
+      return obj;
+    }
+    const cleaned: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = (obj as any)[key];
+      if (val !== undefined) {
+        cleaned[key] = cleanUndefined(val);
+      }
+    }
+    return cleaned;
+  }
+  return obj;
+}
+
 export const firestoreService = {
   async getAll<T>(collectionPath: string, retries = 3): Promise<T[]> {
     try {
@@ -123,8 +147,9 @@ export const firestoreService = {
 
   async add<T extends { id: string }>(collectionPath: string, data: T): Promise<T> {
     try {
-      await setDoc(doc(db, collectionPath, data.id), data);
-      return data;
+      const cleaned = cleanUndefined(data);
+      await setDoc(doc(db, collectionPath, cleaned.id), cleaned);
+      return cleaned;
     } catch (error) {
       handleFirestoreError(error, OperationType.CREATE, collectionPath);
       throw error;
@@ -133,8 +158,9 @@ export const firestoreService = {
 
   async update<T extends { id: string }>(collectionPath: string, id: string, data: Partial<T>): Promise<void> {
     try {
+      const cleaned = cleanUndefined(data);
       const docRef = doc(db, collectionPath, id);
-      await updateDoc(docRef, data as any);
+      await updateDoc(docRef, cleaned as any);
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, `${collectionPath}/${id}`);
       throw error;

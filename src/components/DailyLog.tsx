@@ -98,22 +98,24 @@ const OperatorMultiSelect = ({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="h-8 w-full justify-between rounded-lg border-neutral-200 text-xs px-2 bg-white font-normal hover:bg-neutral-50"
-        >
-          <span className="truncate">
-            {selected.length > 0 
-              ? `${selected.length} seleccionados`
-              : "Seleccionar..."}
-          </span>
-          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className="h-8 w-full justify-between rounded-lg border-neutral-200 text-xs px-2 bg-white font-normal hover:bg-neutral-50"
+          >
+            <span className="truncate">
+              {selected.length > 0 
+                ? `${selected.length} seleccionados`
+                : "Seleccionar..."}
+            </span>
+            <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+          </Button>
+        }
+      />
       <PopoverContent className="w-[200px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Buscar operario..." className="h-8" />
