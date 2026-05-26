@@ -275,6 +275,37 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     setLoadedTasks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
   };
 
+  const handleAddTask = () => {
+    const newTask: WeeklyReportTask = {
+      id: `manual_${Date.now()}`,
+      name: '',
+      date: new Date().toISOString().split('T')[0],
+      responsible: '',
+      status: 'pendiente',
+      priority: 'Media',
+      observations: '',
+      selected: true,
+      photos: []
+    };
+    setLoadedTasks([newTask, ...loadedTasks]);
+  };
+
+  const handlePhotoUpload = (taskId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        if (ev.target && typeof ev.target.result === 'string') {
+          const base64Str = ev.target.result;
+          setLoadedTasks(prev => prev.map(t => 
+            t.id === taskId ? { ...t, photos: [...(t.photos || []), base64Str] } : t
+          ));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const toggleSelectIncident = (id: string) => {
     setLoadedIncidents(prev => prev.map(i => i.id === id ? { ...i, selected: !i.selected } : i));
   };
@@ -1139,6 +1170,12 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                       </select>
 
                       <button
+                        onClick={handleAddTask}
+                        className="px-2.5 py-1 rounded bg-indigo-50 font-bold hover:bg-indigo-100 text-[10px] text-indigo-700 transition flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" /> Añadir
+                      </button>
+                      <button
                         onClick={toggleSelectAllTasks}
                         className="px-2.5 py-1 rounded bg-zinc-100 font-bold hover:bg-zinc-200 text-[10px] text-zinc-700 transition"
                       >
@@ -1183,7 +1220,14 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                             </td>
                             <td className="p-3 font-medium text-zinc-800">
                               <div className="flex flex-col gap-1.5 min-w-[200px]">
-                                <span>{task.name}</span>
+                                <input
+                                  type="text"
+                                  value={task.name}
+                                  onChange={(e) => handleUpdateTaskField(task.id, 'name', e.target.value)}
+                                  disabled={!task.selected}
+                                  placeholder="Nombre de la tarea"
+                                  className="w-full bg-transparent border-none p-0 focus:ring-0 text-sm font-medium text-zinc-900 placeholder:text-zinc-400 focus:outline-none"
+                                />
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span className="bg-indigo-50 border border-indigo-120/40 text-indigo-750 text-[9px] px-1.5 py-0.5 rounded-full font-mono flex items-center gap-1">
                                     <Calendar className="w-2.5 h-2.5" />
@@ -1205,26 +1249,41 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                                     </span>
                                   )}
                                 </div>
-                                {task.photos && task.photos.length > 0 && (
-                                  <div className="flex gap-1.5 mt-1 overflow-x-auto py-1">
-                                    {task.photos.map((ph, idx) => (
-                                      <div key={idx} className="relative w-12 h-10 border border-zinc-200 rounded-md overflow-hidden bg-zinc-50 shrink-0">
-                                        <img 
-                                          src={ph} 
-                                          alt="Evidencia" 
-                                          className="w-full h-full object-cover" 
-                                          referrerPolicy="no-referrer"
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
+                                <div className="flex gap-1.5 mt-1 overflow-x-auto py-1 items-center">
+                                  {task.photos && task.photos.map((ph, idx) => (
+                                    <div key={idx} className="relative w-12 h-10 border border-zinc-200 rounded-md overflow-hidden bg-zinc-50 shrink-0">
+                                      <img 
+                                        src={ph} 
+                                        alt="Evidencia" 
+                                        className="w-full h-full object-cover" 
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    </div>
+                                  ))}
+                                  {task.selected && (
+                                    <label className="cursor-pointer flex items-center justify-center w-12 h-10 border border-dashed border-zinc-300 rounded-md hover:bg-zinc-50 hover:border-indigo-400 transition text-zinc-400 shrink-0 title='Añadir Evidencia'">
+                                      <input 
+                                        type="file" 
+                                        accept="image/*" 
+                                        className="hidden" 
+                                        onChange={(e) => handlePhotoUpload(task.id, e)} 
+                                        disabled={!task.selected}
+                                      />
+                                      <Plus className="w-4 h-4" />
+                                    </label>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="p-3">
-                              <span className="text-zinc-600 bg-zinc-100 px-1.5 py-0.5 rounded text-[10px]">
-                                {task.responsible}
-                              </span>
+                              <input
+                                type="text"
+                                value={task.responsible}
+                                onChange={(e) => handleUpdateTaskField(task.id, 'responsible', e.target.value)}
+                                disabled={!task.selected}
+                                placeholder="Resp."
+                                className="w-20 bg-zinc-100 border-none px-1.5 py-0.5 rounded text-[10px] text-zinc-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                              />
                             </td>
                             <td className="p-3">
                               <select
