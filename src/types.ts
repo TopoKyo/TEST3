@@ -222,6 +222,7 @@ export interface WeeklyReport {
     progressPercentage: number;
     recommendations: string[];
     suggestedStatus: 'Excelente' | 'Bueno' | 'Regular' | 'Crítico';
+    taskObservations?: Array<{ taskId: string; observation: string }>;
   };
   tasks: WeeklyReportTask[];
   incidents: WeeklyReportIncident[];

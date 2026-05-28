@@ -368,6 +368,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       };
 
       const payloadTasks = selectedTasks.map(t => ({
+        id: t.id,
         name: t.name,
         responsible: t.responsible,
         status: t.status,
@@ -387,6 +388,15 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       const parsedJSON = await geminiService.generateWeeklyReport(payloadMetadata, payloadTasks, payloadIncidents);
       
       setGeneratedAIPayload(parsedJSON);
+      if (parsedJSON.taskObservations && Array.isArray(parsedJSON.taskObservations)) {
+        setLoadedTasks(prev => prev.map(t => {
+          const obs = parsedJSON.taskObservations.find((o: any) => o.taskId === t.id);
+          if (obs && obs.observation) {
+            return { ...t, observations: obs.observation };
+          }
+          return t;
+        }));
+      }
       toast.success("Resumen Inteligente generado con éxito por Gemini 3.5-Flash.");
     } catch (error: any) {
       console.error(error);

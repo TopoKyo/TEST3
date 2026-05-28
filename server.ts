@@ -221,7 +221,13 @@ async function startServer() {
           "executiveSummary": "Resumen técnico de la semana operativa, ritmos, logros clave e impacto sin mencionar porcentajes ni cifras de cumplimiento.",
           "generalProgressAnalysis": "Explicación narrativa descriptiva del progreso general técnico en base a actividades ejecutadas y contingencias, sin incluir números porcentuales ni símbolos '%'.",
           "recommendations": ["Recomendación 1 corregir...", "Recomendación 2 prevenir..."],
-          "suggestedStatus": "Uno de estos valores exactamente: Excelente | Bueno | Regular | Crítico"
+          "suggestedStatus": "Uno de estos valores exactamente: Excelente | Bueno | Regular | Crítico",
+          "taskObservations": [
+            {
+              "taskId": "ID de la tarea",
+              "observation": "Observación breve de la tarea..."
+            }
+          ]
         }
       `;
 
@@ -241,9 +247,20 @@ async function startServer() {
                 type: Type.ARRAY,
                 items: { type: Type.STRING }
               },
-              suggestedStatus: { type: Type.STRING }
+              suggestedStatus: { type: Type.STRING },
+              taskObservations: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    taskId: { type: Type.STRING },
+                    observation: { type: Type.STRING }
+                  },
+                  required: ["taskId", "observation"]
+                }
+              }
             },
-            required: ["executiveSummary", "generalProgressAnalysis", "recommendations", "suggestedStatus"]
+            required: ["executiveSummary", "generalProgressAnalysis", "recommendations", "suggestedStatus", "taskObservations"]
           }
         }
       });
