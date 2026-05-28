@@ -146,15 +146,31 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
         activeDays.add(dateKey);
         const sortedLogs = dayLogs.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
         
+        let dayMinutes = 0;
         let lastArrival: Date | null = null;
+        let hasLogsPast2PM = false;
+
         sortedLogs.forEach(log => {
+          const logDate = parseISO(log.timestamp);
+          // Si el marcaje está después de las 2:00 PM (14:00)
+          if (logDate.getHours() >= 14) {
+            hasLogsPast2PM = true;
+          }
+
           if (log.type === 'arrival' || log.type === 'break_end') {
-            lastArrival = parseISO(log.timestamp);
+            lastArrival = logDate;
           } else if ((log.type === 'departure' || log.type === 'break_start') && lastArrival) {
-            totalMinutes += differenceInMinutes(parseISO(log.timestamp), lastArrival);
+            dayMinutes += differenceInMinutes(logDate, lastArrival);
             lastArrival = null;
           }
         });
+
+        // Descontar una hora (60 minutos) si hay marcajes después de las 2:00 PM
+        if (hasLogsPast2PM) {
+          dayMinutes = Math.max(0, dayMinutes - 60);
+        }
+
+        totalMinutes += dayMinutes;
       });
 
       stats[userId] = { totalMinutes, days: activeDays };
