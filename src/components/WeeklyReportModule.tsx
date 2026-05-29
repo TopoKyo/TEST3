@@ -397,7 +397,11 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
           return t;
         }));
       }
-      toast.success("Resumen Inteligente generado con éxito por Gemini 3.5-Flash.");
+      if (parsedJSON.isLocalFallback) {
+        toast.info("Alta demanda en el servicio de IA. Se ha redactado un análisis técnico local provisional con éxito.");
+      } else {
+        toast.success("Resumen Inteligente generado con éxito por Gemini.");
+      }
     } catch (error: any) {
       console.error(error);
       if (error && error.message === "API_KEY_REQUIRED") {
@@ -505,9 +509,39 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     }
   };
 
-  const exportToPDF = (report: WeeklyReport) => {
+  const exportToPDF = async (report: WeeklyReport) => {
+    const loadingToast = toast.loading("Generando PDF con logotipo...");
     try {
       const doc = new jsPDF();
+      
+      // Load logo.png from the public folder
+      let logoDataUrl = "";
+      let logoWidth = 36;
+      let logoHeight = 16;
+      try {
+        logoDataUrl = await new Promise<string>((resolve, reject) => {
+          const img = new Image();
+          img.src = '/logo.png';
+          img.crossOrigin = 'Anonymous';
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(img, 0, 0);
+              const aspect = img.height / img.width;
+              logoHeight = Math.min(14, logoWidth * aspect);
+              resolve(canvas.toDataURL('image/png'));
+            } else {
+              reject(new Error('Canvas context not available'));
+            }
+          };
+          img.onerror = () => reject(new Error('Error al cargar el logo'));
+        });
+      } catch (err) {
+        console.error("Could not load logo for PDF", err);
+      }
       
       // Professional design standards (high-contrast, sleek branding)
       doc.setFillColor(79, 70, 229); // Indigo 600 corporativo
@@ -517,7 +551,15 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.setTextColor(255, 255, 255);
-      doc.text("INFORME SEMANAL INTELIGENTE - RESUMEN EJECUTIVO", 15, 10);
+      doc.text("INFORME SEMANAL INTELIGENTE", 15, 10);
+
+      if (logoDataUrl) {
+        try {
+          doc.addImage(logoDataUrl, 'PNG', 210 - 15 - logoWidth, 7.5 - logoHeight / 2, logoWidth, logoHeight);
+        } catch (imgErr) {
+          console.error("Failed to add logo image to PDF:", imgErr);
+        }
+      }
 
       // Meta grid box
       doc.setFillColor(243, 244, 246); // gray-100
@@ -717,8 +759,10 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       doc.text("Sello y Firma del Responsable Técnico de Planta", 105, sigY + 15, { align: "center" });
 
       doc.save(`Informe_Semanal_${report.project}_${report.weekLabel}.pdf`);
+      toast.dismiss(loadingToast);
       toast.success("PDF descargado correctamente.");
     } catch (err) {
+      toast.dismiss(loadingToast);
       console.error(err);
       toast.error("Ocurrió un error al compilar el PDF");
     }
