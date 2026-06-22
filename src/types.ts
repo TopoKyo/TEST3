@@ -116,6 +116,7 @@ export interface ProblemEntry {
   impact: string;
   correctiveAction: string;
   responsible: string;
+  image?: string;
 }
 
 export interface PlanEntry {
@@ -123,6 +124,8 @@ export interface PlanEntry {
   number: number;
   activity: string;
   responsible: string;
+  tower: string;
+  side: 'A' | 'B' | '-';
 }
 
 export interface WishListItem {
@@ -193,7 +196,29 @@ export interface WeeklyReportTask {
   side?: string;
 }
 
+export interface TowerImpact {
+  id: string;
+  towerLabel: string;
+  side: 'A' | 'B' | 'Ambos' | '-';
+  status: 'Intacta' | 'Daños Menores' | 'Daños Severos' | 'Derrumbe';
+  comments: string;
+  photo?: string;
+}
+
+export interface ExceptionalReport {
+  id: string;
+  date: string;
+  eventType: string; // Terremoto, Inundación, etc.
+  project: string;
+  description: string;
+  impactAnalysis: TowerImpact[];
+  photos: string[];
+  createdAt: string;
+  createdBy: string;
+}
+
 export interface WeeklyReportIncident {
+
   id: string;
   description: string;
   date: string;
@@ -203,6 +228,7 @@ export interface WeeklyReportIncident {
   gravity: 'Baja' | 'Media' | 'Alta' | 'Crítica';
   selected: boolean;
   isManual?: boolean;
+  image?: string;
 }
 
 export interface WeeklyReport {

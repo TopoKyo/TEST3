@@ -15,6 +15,7 @@ import {
   FileText,
   Clock,
   AlertCircle,
+  AlertOctagon,
   Sparkles as SparklesIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -57,6 +58,14 @@ export default function Dashboard({ onNavigate, movements, workLogs, wishlistIte
       icon: ClipboardList, 
       color: 'bg-emerald-500', 
       textColor: 'text-emerald-500' 
+    },
+    { 
+      id: 'exceptional', 
+      label: 'Reporte Excepcional', 
+      description: 'Reportar sismos, contingencias o daños',
+      icon: AlertOctagon, 
+      color: 'bg-red-600', 
+      textColor: 'text-red-600' 
     },
     { 
       id: 'report', 

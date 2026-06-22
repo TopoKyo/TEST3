@@ -6,7 +6,7 @@ import {
   SkillCategory, 
   SKILL_LABELS 
 } from '@/src/types';
-import { firestoreService } from '@/src/lib/firestoreService';
+import { firestoreService, handleFirestoreError, OperationType } from '@/src/lib/firestoreService';
 import { collection, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from '@/src/lib/firebase';
 import { 
@@ -97,7 +97,6 @@ export const SoftSkillsForm: React.FC<SoftSkillsFormProps> = ({ users, onSuccess
       console.error("Error fetching history:", error);
       // Try to use the error handler for more details
       try {
-        const { handleFirestoreError, OperationType } = await import('@/src/lib/firestoreService');
         handleFirestoreError(error, OperationType.LIST, `skillEvaluations (query for ${userId})`);
       } catch (e) {
         // Fallback for safety

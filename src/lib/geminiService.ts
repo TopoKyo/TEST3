@@ -317,5 +317,82 @@ export const geminiService = {
       console.warn("Fallo al contactar la API clave cliente de Gemini:", err);
       return generateLocalHeuristicWeeklyReport(metadata, tasks, incidents);
     }
+  },
+
+  async generateExceptionalReport(eventType: string, project: string, impacts: any[], hasPhotos: boolean): Promise<any> {
+    const key = getApiKey();
+    if (!key) {
+      throw new Error("No hay API Key configurada para usar la IA de Gemini");
+    }
+
+    const ai = new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build'
+        }
+      }
+    });
+
+    const systemInstruction = `
+        Actúa como un Ingeniero Estructural y Supervisor de Obra.
+        Redacta una evaluación técnica descriptiva de daños post-evento excepcional (sismo, inundación, etc.).
+        Genera una descripción ejecutiva principal del evento.
+        Genera comentarios estructurales técnicos para cada torre listada en base a su estado.
+        Responde estrictamente en formato JSON.
+    `;
+
+    // Only pass necessary fields, not massive base64 photo strings
+    const strippedImpacts = impacts.map(imp => ({
+       id: imp.id,
+       towerLabel: imp.towerLabel,
+       side: imp.side,
+       status: imp.status,
+       hasPhoto: !!imp.photo
+    }));
+
+    const prompt = `
+        EVENTO: ${eventType}
+        PROYECTO/PLANTA: ${project}
+        MÁS INFORMACIÓN: ${hasPhotos ? "Existen evidencias fotográficas adjuntas de manera general" : "No hay evidencias fotográficas generales"}
+        
+        LISTADO DE TORRES Y ESTADOS:
+        ${JSON.stringify(strippedImpacts, null, 2)}
+        
+        ESQUEMA DE RESPUESTA:
+        - "mainDescription": Descripción técnica del estado de la obra y el suceso.
+        - "towerComments": Array con { "towerId": string, "comment": string } donde el comment detalla según el estado (ej. Daños Severos -> Requiere intervención, Intacta -> Sin novedades, etc.)
+    `;
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3.5-flash",
+      contents: prompt,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        temperature: 0.2,
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            mainDescription: { type: Type.STRING },
+            towerComments: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  towerId: { type: Type.STRING },
+                  comment: { type: Type.STRING }
+                },
+                required: ["towerId", "comment"]
+              }
+            }
+          },
+          required: ["mainDescription", "towerComments"]
+        }
+      }
+    });
+
+    const textOutput = response.text || "{}";
+    return JSON.parse(textOutput.trim());
   }
 };

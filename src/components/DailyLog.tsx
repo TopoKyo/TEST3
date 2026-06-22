@@ -195,6 +195,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
+  const [activeProblemId, setActiveProblemId] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [viewMode, setViewMode] = useState<'daily' | 'history'>('daily');
@@ -243,7 +244,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   };
 
   const capturePhoto = async () => {
-    if (videoRef.current && activeActivityId) {
+    if (videoRef.current && (activeActivityId || activeProblemId)) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
@@ -253,12 +254,16 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       
       try {
         const compressed = await compressImage(dataUrl, 800, 0.6);
-        updateItem('activities', activeActivityId, 'image', compressed);
+        if (activeActivityId) updateItem('activities', activeActivityId, 'image', compressed);
+        else if (activeProblemId) updateItem('problems', activeProblemId, 'image', compressed);
       } catch (e) {
-        updateItem('activities', activeActivityId, 'image', dataUrl);
+        if (activeActivityId) updateItem('activities', activeActivityId, 'image', dataUrl);
+        else if (activeProblemId) updateItem('problems', activeProblemId, 'image', dataUrl);
       }
       
       setCameraOpen(false);
+      setActiveActivityId(null);
+      setActiveProblemId(null);
     }
   };
 
@@ -289,7 +294,25 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   };
 
   const handleCreateNew = () => {
-    const prevLog = logs.length > 0 ? logs[logs.length - 1] : null;
+    const sortedLogs = [...logs].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const prevLog = sortedLogs.length > 0 ? sortedLogs[sortedLogs.length - 1] : null;
+
+    const transferredActivities: ActivityEntry[] = [];
+    if (prevLog && prevLog.nextDayPlan && prevLog.nextDayPlan.length > 0) {
+      prevLog.nextDayPlan.forEach((plan, idx) => {
+        transferredActivities.push({
+          id: Math.random().toString(36).substr(2, 5),
+          item: idx + 1,
+          description: plan.activity,
+          operator: plan.responsible,
+          tower: plan.tower || '',
+          side: plan.side || '-',
+          status: 'en proceso',
+          period: 'morning'
+        });
+      });
+    }
+
     const newLog: WorkLog = {
       ...EMPTY_LOG,
       id: Math.random().toString(36).substr(2, 9),
@@ -301,6 +324,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       client: prevLog?.client || '',
       residentHead: prevLog?.residentHead || '',
       workAddress: prevLog?.workAddress || '',
+      activities: transferredActivities,
     };
     
     // Auto-populate personnel from attendance logs of today
@@ -395,7 +419,9 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         id: Math.random().toString(36).substr(2, 5),
         number: items.length + 1,
         activity: '',
-        responsible: ''
+        responsible: '',
+        tower: '',
+        side: '-'
       });
     }
 
@@ -425,6 +451,20 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         updateItem('activities', id, 'image', compressed);
       } catch (e) {
         updateItem('activities', id, 'image', base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleProblemImage = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const compressed = await compressImage(base64, 800, 0.6);
+        updateItem('problems', id, 'image', compressed);
+      } catch (e) {
+        updateItem('problems', id, 'image', base64);
       }
     };
     reader.readAsDataURL(file);
@@ -616,23 +656,48 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
 
     // Problems and Deviations
     const problemBody = currentLog.problems.length > 0 
-      ? currentLog.problems.map(p => [p.date, p.description, p.impact, p.correctiveAction])
-      : [['-', 'Sin incidencias registradas', '-', '-']];
+      ? currentLog.problems.map(p => [p.date, p.description, p.impact, p.correctiveAction, ''])
+      : [['-', 'Sin incidencias registradas', '-', '-', '']];
 
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
       head: [
-        [{ content: 'PROBLEMAS Y DESVIACIONES', colSpan: 4, styles: { halign: 'center', fillColor: [153, 27, 27] } }],
-        ['FECHA', 'DESCRIPCIÓN DEL PROBLEMA', 'IMPACTO', 'ACCIÓN TOMADA']
+        [{ content: 'PROBLEMAS Y DESVIACIONES', colSpan: 5, styles: { halign: 'center', fillColor: [153, 27, 27] } }],
+        ['FECHA', 'DESCRIPCIÓN DEL PROBLEMA', 'IMPACTO', 'ACCIÓN TOMADA', 'FOTO']
       ],
       body: problemBody,
       theme: 'grid',
       headStyles: { fillColor: [180, 180, 180], textColor: [20, 20, 20], fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 25 },
+        0: { cellWidth: 20 },
         1: { cellWidth: 'auto' },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 50 },
+        2: { cellWidth: 20 },
+        3: { cellWidth: 40 },
+        4: { cellWidth: 30 },
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.row.index < currentLog.problems.length) {
+          const problem = currentLog.problems[data.row.index];
+          if (problem && problem.image) {
+            data.row.height = 25; 
+          }
+        }
+      },
+      didDrawCell: (data) => {
+        if (data.section === 'body' && data.column.index === 4) {
+          const problem = currentLog.problems[data.row.index];
+          if (problem && problem.image) {
+            try {
+              const x = data.cell.x + 2;
+              const y = data.cell.y + 2;
+              const w = data.cell.width - 4;
+              const h = data.cell.height - 4;
+              doc.addImage(problem.image, 'JPEG', x, y, w, h);
+            } catch (e) {
+              console.error('Error drawing image in PDF table', e);
+            }
+          }
+        }
       }
     });
     
@@ -1154,7 +1219,50 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                   <Input placeholder="Acción correctiva" value={p.correctiveAction} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'correctiveAction', e.target.value)} className="h-9 rounded-xl text-xs" />
                                 </div>
                              </div>
-                             <Input placeholder="Responsable" value={p.responsible} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'responsible', e.target.value)} className="h-9 rounded-xl text-xs" />
+                             <div className="flex gap-2 items-center">
+                               <Input placeholder="Responsable" value={p.responsible} disabled={!isEditing} onChange={e => updateItem('problems', p.id, 'responsible', e.target.value)} className="h-9 rounded-xl text-xs flex-1" />
+                               {p.image ? (
+                                <div className="relative h-9 w-9 shrink-0 rounded-xl overflow-hidden group/img">
+                                  <img src={p.image} className="w-full h-full object-cover cursor-pointer" onClick={() => { if(!isEditing) { const w = window.open(); if(w) { w.document.write(`<img src="${p.image}" style="max-width:100%;"/>`); }}}} alt="" />
+                                  {isEditing && (
+                                    <Button size="icon" variant="destructive" className="absolute inset-0 w-full h-full opacity-0 group-hover/img:opacity-100 transition-opacity" onClick={() => updateItem('problems', p.id, 'image', undefined)}>
+                                      <X size={14} />
+                                    </Button>
+                                  )}
+                                </div>
+                              ) : (
+                                isEditing && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <div className="relative group/upload">
+                                      <input
+                                        type="file"
+                                        accept="image/*"
+                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleProblemImage(p.id, file);
+                                        }}
+                                        title="Subir Archivo"
+                                      />
+                                      <Button variant="outline" size="icon" className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all">
+                                        <Upload size={16} />
+                                      </Button>
+                                    </div>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-9 w-9 rounded-xl text-neutral-400 bg-white border-neutral-100 hover:border-primary/30 hover:text-primary transition-all"
+                                      onClick={() => {
+                                        setActiveProblemId(p.id);
+                                        setCameraOpen(true);
+                                      }}
+                                    >
+                                      <Camera size={16} />
+                                    </Button>
+                                  </div>
+                                )
+                              )}
+                             </div>
                            </CardContent>
                          </Card>
                        ))}
@@ -1164,10 +1272,21 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                  <LogSection title="Plan Trabajo Mañana" icon={<Calendar />} isEditing={isEditing} onAdd={() => addItem('nextDayPlan')}>
                     <div className="space-y-4">
                        {currentLog?.nextDayPlan.map(p => (
-                         <div key={p.id} className="flex gap-2 items-center">
-                            <span className="text-xs font-bold text-neutral-300">#{p.number}</span>
-                            <Input placeholder="Actividad..." value={p.activity} disabled={!isEditing} onChange={e => updateItem('nextDayPlan', p.id, 'activity', e.target.value)} className="h-10 rounded-xl" />
-                            {isEditing && <Button variant="ghost" size="icon" className="text-rose-500 shrink-0" onClick={() => removeItem('nextDayPlan', p.id)}><Trash2 size={14} /></Button>}
+                         <div key={p.id} className="flex flex-col md:flex-row gap-2 items-start md:items-center bg-neutral-50/50 p-2 rounded-xl border border-neutral-100">
+                            <span className="text-xs font-bold text-neutral-400 shrink-0 w-6">#{p.number}</span>
+                            <Input placeholder="Actividad o frente de trabajo..." value={p.activity} disabled={!isEditing} onChange={e => updateItem('nextDayPlan', p.id, 'activity', e.target.value)} className="h-10 rounded-xl flex-1 bg-white" />
+                            <Input placeholder="Torre" value={p.tower || ''} disabled={!isEditing} onChange={e => updateItem('nextDayPlan', p.id, 'tower', e.target.value)} className="h-10 rounded-xl w-24 shrink-0 bg-white" />
+                            <select 
+                              disabled={!isEditing}
+                              value={p.side || '-'}
+                              onChange={e => updateItem('nextDayPlan', p.id, 'side', e.target.value)}
+                              className="h-10 w-24 shrink-0 rounded-xl border border-neutral-200 text-xs px-2 focus:ring-1 focus:ring-primary outline-none bg-white font-medium"
+                             >
+                              <option value="-">N/A</option>
+                              <option value="A">Lado A</option>
+                              <option value="B">Lado B</option>
+                            </select>
+                            {isEditing && <Button variant="ghost" size="icon" className="text-rose-500 shrink-0 h-10 w-10 hover:bg-rose-50 rounded-xl" onClick={() => removeItem('nextDayPlan', p.id)}><Trash2 size={16} /></Button>}
                          </div>
                        ))}
                     </div>

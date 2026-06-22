@@ -86,6 +86,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
   const [newIncidentResponsible, setNewIncidentResponsible] = useState('');
   const [newIncidentImpact, setNewIncidentImpact] = useState('');
   const [newIncidentCorrective, setNewIncidentCorrective] = useState('');
+  const [newIncidentImage, setNewIncidentImage] = useState<string | undefined>(undefined);
 
   // Zoom/Full-screen observations editor modal state
   const [activeObsTask, setActiveObsTask] = useState<WeeklyReportTask | null>(null);
@@ -234,7 +235,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
               responsible: prob.responsible,
               gravity: prob.impact?.toLowerCase().includes('alto') || prob.impact?.toLowerCase().includes('crítico') ? 'Alta' : 'Media',
               selected: true,
-              isManual: false
+              isManual: false,
+              image: prob.image
             });
           });
         }
@@ -332,7 +334,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       impact: newIncidentImpact,
       correctiveAction: newIncidentCorrective,
       selected: true,
-      isManual: true
+      isManual: true,
+      image: newIncidentImage
     };
 
     setLoadedIncidents(prev => [...prev, manualItem]);
@@ -342,6 +345,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     setNewIncidentResponsible('');
     setNewIncidentImpact('');
     setNewIncidentCorrective('');
+    setNewIncidentImage(undefined);
     setShowManualIncidentModal(false);
     toast.success("Incidencia agregada manualmente exitosamente.");
   };
@@ -444,7 +448,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     let base = (completedTasksCount / selectedTasksCount) * 100;
     
     // Penalize for incidents gravity
-    loadedIncidents.filter(i => i.selected).forEach(inc => {
+    loadedIncidents.filter(i => i.selected !== false).forEach(inc => {
       if (inc.gravity === 'Crítica') base -= 15;
       else if (inc.gravity === 'Alta') base -= 8;
       else if (inc.gravity === 'Media') base -= 4;
@@ -718,7 +722,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       doc.setTextColor(79, 70, 229);
       doc.text("4. Detalle de Incidencias Operativas", 15, newY);
 
-      const incidentData = report.incidents.filter(i => i.selected).map(i => [
+      const incidentData = (report.incidents || []).filter(i => i.selected !== false).map(i => [
         i.description,
         i.date,
         i.gravity.toUpperCase(),
@@ -735,13 +739,61 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: { fillColor: [225, 29, 72], textColor: [255, 255, 255] }
         });
-        newY = (doc as any).lastAutoTable.finalY + 10;
+        newY = (doc as any).lastAutoTable.finalY + 12;
       } else {
         doc.setFont("helvetica", "italic");
         doc.setFontSize(10);
         doc.setTextColor(107, 114, 128);
         doc.text("No se reportaron incidentes notables ni paros de obra en el periodo actual.", 15, newY + 8);
         newY = newY + 18;
+      }
+
+      // Render incident photos/evidences if any exist
+      const selectedIncidentsWithImages = (report.incidents || []).filter(i => i.selected !== false && i.image);
+      if (selectedIncidentsWithImages.length > 0) {
+        if (newY > 210) {
+          doc.addPage();
+          newY = 20;
+        }
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(225, 29, 72);
+        doc.text("📸 Evidencias de Desvíos e Incidencias Semanales", 15, newY);
+        newY += 8;
+
+        for (const inc of selectedIncidentsWithImages) {
+          if (newY > 200) {
+            doc.addPage();
+            newY = 20;
+          }
+
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(9);
+          doc.setTextColor(31, 41, 55);
+          doc.text(`Incidencia/Riesgo: ${inc.description} (${inc.date})`, 15, newY);
+          newY += 4;
+
+          if (inc.correctiveAction) {
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.5);
+            doc.setTextColor(107, 114, 128);
+            doc.text(`Acción Mitigación: ${inc.correctiveAction}`, 15, newY);
+            newY += 4;
+          }
+
+          const imgWidth = 72;
+          const imgHeight = 48;
+          try {
+            doc.setDrawColor(229, 231, 235);
+            doc.rect(14.5, newY - 0.5, imgWidth + 1, imgHeight + 1, 'D');
+            const imgFormat = (inc.image && inc.image.startsWith('data:image/png')) ? 'PNG' : (inc.image && inc.image.startsWith('data:image/webp')) ? 'WEBP' : 'JPEG';
+            doc.addImage(inc.image!, imgFormat, 15, newY, imgWidth, imgHeight);
+            newY += imgHeight + 8;
+          } catch (e) {
+            console.error("Error inserting incident image in PDF:", e);
+          }
+        }
       }
 
       if (newY > 230) {
@@ -900,7 +952,10 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
               <tbody>
                 ${(report.incidents || []).filter(i => i.selected !== false).map(i => `
                   <tr>
-                    <td>${i.description}</td>
+                    <td>
+                      <div>${i.description}</div>
+                      ${i.image ? `<div style="margin-top:8px;"><img src="${i.image}" style="max-width:140px; border:1px solid #cbd5e1; border-radius:4px;" /></div>` : ''}
+                    </td>
                     <td>${i.date}</td>
                     <td style="color:red; font-weight:bold;">${i.gravity.toUpperCase()}</td>
                     <td>${i.responsible || 'Operario de turno'}</td>
@@ -971,8 +1026,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
 🤖 *RESPUESTA DE IA (RESUMEN):*
 "${report.aiSummary?.executiveSummary || 'N/A'}"
 
-🛠️ *Tareas Clave:* ${report.tasks.filter(t=>t.selected).length} registradas.
-⚠️ *Incidentes:* ${report.incidents.filter(i=>i.selected).length} reportados.
+🛠️ *Tareas Clave:* ${report.tasks.filter(t=>t.selected !== false).length} registradas.
+⚠️ *Incidentes:* ${report.incidents.filter(i=>i.selected !== false).length} reportados.
     `.trim();
 
     navigator.clipboard.writeText(textToCopy);
@@ -1454,6 +1509,11 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                                   {inc.gravity}
                                 </span>
                                 <p className="text-xs font-medium text-zinc-800 mt-2">{inc.description}</p>
+                                {inc.image && (
+                                  <div className="mt-2 w-16 h-16 rounded-lg overflow-hidden border border-zinc-200">
+                                    <img src={inc.image} alt="Evidencia" className="w-full h-full object-cover cursor-pointer" onClick={() => { const w = window.open(); if(w) w.document.write(`<img src="${inc.image}" style="max-width:100%;"/>`); }} />
+                                  </div>
+                                )}
                               </div>
                             </div>
 
@@ -1995,6 +2055,65 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                       </div>
                     </div>
 
+                    {/* Incidencias del Reporte y Evidencias */}
+                    <div className="flex flex-col gap-2 border-t border-zinc-100 pt-4">
+                      <h4 className="text-[10px] uppercase tracking-wider font-bold text-zinc-450 font-mono flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+                        <span>Incidencias Reportadas y Desvíos ({(selectedHistoricalReport.incidents || []).filter(i => i.selected !== false).length})</span>
+                      </h4>
+                      
+                      <div className="flex flex-col gap-2.5 max-h-[250px] overflow-y-auto pr-1">
+                        {!(selectedHistoricalReport.incidents) || selectedHistoricalReport.incidents.filter(i => i.selected !== false).length === 0 ? (
+                          <p className="text-[11px] text-zinc-400 text-center py-4 bg-zinc-50 rounded-xl">Sin incidencias registradas en este reporte.</p>
+                        ) : (
+                          selectedHistoricalReport.incidents.filter(i => i.selected !== false).map((inc) => (
+                            <div key={inc.id} className="bg-zinc-50 border border-zinc-200/50 rounded-xl p-3 flex flex-col gap-2">
+                              {/* Header */}
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex-1">
+                                  <h5 className="font-bold text-xs text-zinc-800 leading-tight">{inc.description}</h5>
+                                  <span className="text-[9px] text-zinc-400 mt-1 block font-mono">
+                                    📅 {inc.date} • Reportado: <span className="font-sans font-medium text-zinc-650">{inc.responsible || 'General'}</span>
+                                  </span>
+                                </div>
+                                <span className={cn(
+                                  "px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-wider shrink-0 border",
+                                  inc.gravity === 'Crítica' ? "bg-red-105 text-red-800 border-red-300 bg-red-50" :
+                                  inc.gravity === 'Alta' ? "bg-orange-105 text-orange-850 border-orange-300 bg-orange-50" :
+                                  inc.gravity === 'Media' ? "bg-amber-105 text-amber-850 border-amber-300 bg-amber-50" :
+                                  "bg-green-105 text-green-800 border-green-300 bg-green-50"
+                                )}>
+                                  {inc.gravity}
+                                </span>
+                              </div>
+
+                              {/* Mitigation details */}
+                              {inc.correctiveAction && (
+                                <div className="text-[9px] text-zinc-550 border-t border-dashed border-zinc-200/60 pt-1.5 mt-0.5">
+                                  <span><b>Mitigación:</b> <span className="italic">{inc.correctiveAction}</span></span>
+                                </div>
+                              )}
+
+                              {/* Incident photo */}
+                              {inc.image && (
+                                <div className="mt-2 pt-2 border-t border-zinc-200/40">
+                                  <div className="relative w-16 h-12 rounded overflow-hidden border border-zinc-200 bg-white shadow-sm shrink-0">
+                                    <img 
+                                      src={inc.image} 
+                                      alt="Foto Evidencia" 
+                                      className="w-full h-full object-cover cursor-pointer" 
+                                      onClick={() => { const w = window.open(); if(w) w.document.write(`<img src="${inc.image}" style="max-width:100%;"/>`); }}
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
                     {/* Actions block for Historical report */}
                     <div className="border-t border-zinc-100 pt-5 flex flex-col gap-3">
                       
@@ -2156,9 +2275,46 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                 />
               </div>
 
+              <div>
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1 block font-mono">
+                  Evidencia Fotográfica (Opcional)
+                </label>
+                <div className="flex items-center gap-2 mt-1">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files.length > 0) {
+                        const file = e.target.files[0];
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          if (ev.target && typeof ev.target.result === 'string') {
+                            setNewIncidentImage(ev.target.result);
+                          }
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="w-full text-[10px] text-zinc-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-xl file:border file:border-zinc-200 file:text-[10px] file:font-semibold file:bg-zinc-100 file:text-zinc-700 hover:file:bg-zinc-200"
+                  />
+                  {newIncidentImage && (
+                    <div className="relative w-10 h-10 rounded-xl overflow-hidden border border-zinc-200 shrink-0 group">
+                      <img src={newIncidentImage} alt="Anexo" className="w-full h-full object-cover" />
+                      <button 
+                        type="button" 
+                        onClick={() => setNewIncidentImage(undefined)}
+                        className="absolute inset-0 bg-black/60 text-white flex items-center justify-center font-bold text-[9px] opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <button
                 type="submit"
-                className="w-full mt-2 py-2 bg-indigo-650 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl transition"
+                className="w-full mt-2 py-2.5 bg-indigo-650 hover:bg-indigo-600 text-white font-bold text-xs rounded-xl transition cursor-pointer"
               >
                 Agregar Incidencia
               </button>
