@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight, RefreshCcw } from 'lucide-react';
+import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight, RefreshCcw, Search, User as UserIcon } from 'lucide-react';
 import { User, AttendanceType, ATTENDANCE_LABELS, AttendanceLog } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
 import * as faceapi from 'face-api.js';
@@ -33,6 +33,8 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
   const [debugInfo, setDebugInfo] = useState({ fps: 0, latency: 0 });
   const [scanMessage, setScanMessage] = useState('Buscando rostro...');
   const [faceQuality, setFaceQuality] = useState(0); // 0-100
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -63,7 +65,13 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
     startCamera();
 
     if (users.length > 0) {
-      const matcher = faceService.createMatcher(users.map(u => ({ name: u.id, descriptor: u.faceDescriptor })));
+      const targetUsers = selectedUserId 
+        ? users.filter(u => u.id === selectedUserId) 
+        : users;
+
+      const matcher = targetUsers.length > 0
+        ? faceService.createMatcher(targetUsers.map(u => ({ name: u.id, descriptor: u.faceDescriptor })))
+        : null;
       let lastActivityTime = Date.now();
 
       const loop = async (time: number) => {
@@ -201,7 +209,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
       stream?.getTracks().forEach(t => t.stop());
       cancelAnimationFrame(animationFrameId);
     };
-  }, [users, isScanning, restartKey]);
+  }, [users, isScanning, restartKey, selectedUserId]);
 
   useEffect(() => {
     if (recognizedUser && canvasRef.current) {
@@ -234,6 +242,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
       toast.success(`Asistencia de ${ATTENDANCE_LABELS[type]} registrada para ${recognizedUser.name}`);
       onLogCreated();
       setRecognizedUser(null);
+      setSelectedUserId(null);
       setIsScanning(true);
     } catch (error) {
       toast.error('Error al registrar asistencia');
@@ -364,7 +373,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
                 <Button 
                   disabled={loading || lastLogType === 'arrival'}
                   onClick={() => handleAttendance('arrival')}
-                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-emerald-600 border-2 border-emerald-100 hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm disabled:opacity-30"
+                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-emerald-600 border-2 border-emerald-100 hover:bg-emerald-50 hover:border-emerald-200 transition-all shadow-sm disabled:opacity-30 cursor-pointer"
                   variant="outline"
                 >
                   <ArrowRight size={28} />
@@ -373,7 +382,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
                 <Button 
                    disabled={loading || lastLogType === 'break_start'}
                   onClick={() => handleAttendance('break_start')}
-                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-blue-600 border-2 border-blue-100 hover:bg-blue-50 hover:border-blue-200 transition-all shadow-sm disabled:opacity-30"
+                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-blue-600 border-2 border-blue-100 hover:bg-blue-50 hover:border-blue-200 transition-all shadow-sm disabled:opacity-30 cursor-pointer"
                   variant="outline"
                 >
                   <Coffee size={28} />
@@ -382,7 +391,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
                 <Button 
                    disabled={loading || lastLogType === 'break_end'}
                   onClick={() => handleAttendance('break_end')}
-                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-amber-600 border-2 border-amber-100 hover:bg-amber-50 hover:border-amber-200 transition-all shadow-sm disabled:opacity-30"
+                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-amber-600 border-2 border-amber-100 hover:bg-amber-50 hover:border-amber-200 transition-all shadow-sm disabled:opacity-30 cursor-pointer"
                   variant="outline"
                 >
                   <Clock size={28} />
@@ -391,7 +400,7 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
                 <Button 
                    disabled={loading || lastLogType === 'departure'}
                   onClick={() => handleAttendance('departure')}
-                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-rose-600 border-2 border-rose-100 hover:bg-rose-50 hover:border-rose-200 transition-all shadow-sm disabled:opacity-30"
+                  className="h-28 flex flex-col gap-2 rounded-2xl bg-white text-rose-600 border-2 border-rose-100 hover:bg-rose-50 hover:border-rose-200 transition-all shadow-sm disabled:opacity-30 cursor-pointer"
                   variant="outline"
                 >
                   <LogOut size={28} />
@@ -401,29 +410,154 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
 
               <Button 
                 variant="ghost" 
-                className="w-full text-neutral-400 hover:text-neutral-600"
+                className="w-full text-neutral-400 hover:text-neutral-600 cursor-pointer"
                 onClick={() => {
                   setRecognizedUser(null);
+                  setSelectedUserId(null);
                   setIsScanning(true);
                 }}
               >
                 No soy yo, intentar de nuevo
               </Button>
             </motion.div>
+          ) : selectedUserId ? (
+            (() => {
+              const selectedUser = users.find(u => u.id === selectedUserId);
+              return (
+                <motion.div
+                  key="verifying-selected"
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: -20 }}
+                  className="flex flex-col gap-6"
+                >
+                  <Card className="border-indigo-200 bg-indigo-50/20 border-2 shadow-sm rounded-3xl">
+                    <CardContent className="pt-6 flex flex-col items-center text-center">
+                      <div className="relative">
+                        {selectedUser?.image ? (
+                          <img 
+                            src={selectedUser.image} 
+                            alt="" 
+                            className="w-28 h-28 rounded-2xl object-cover ring-4 ring-white shadow-xl mx-auto" 
+                          />
+                        ) : (
+                          <div className="w-28 h-28 rounded-2xl bg-neutral-200 ring-4 ring-white flex items-center justify-center text-neutral-400 mx-auto">
+                            <UserCheck size={36} />
+                          </div>
+                        )}
+                        <span className="absolute -bottom-1.5 -right-1.5 bg-indigo-600 text-white p-1.5 rounded-xl border-2 border-white shadow-md animate-pulse">
+                          <Camera size={14} />
+                        </span>
+                      </div>
+                      
+                      <div className="mt-4">
+                        <Badge className="bg-indigo-600/10 text-indigo-700 hover:bg-indigo-600/10 border-none px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                          Modo Verificación Directa
+                        </Badge>
+                        <h3 className="text-xl font-bold tracking-tight text-neutral-800 mt-2">{selectedUser?.name}</h3>
+                        <p className="text-neutral-500 font-mono text-xs tracking-tight capitalize mt-0.5">ID: {selectedUser?.id}</p>
+                      </div>
+
+                      <div className="w-full bg-indigo-50/80 rounded-2xl p-4 border border-indigo-100/50 mt-4 text-left">
+                        <div className="flex gap-2 text-indigo-700">
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <div className="text-xs">
+                            <p className="font-bold">¿Cómo verificar tu identidad?</p>
+                            <p className="mt-0.5 text-neutral-600">Por favor, colócate frente al escáner facial. El sistema enfocará el sensor únicamente en tu rostro registrado.</p>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Button 
+                    variant="outline" 
+                    className="w-full py-4 rounded-xl border-neutral-300 text-neutral-600 hover:bg-neutral-50 text-xs font-semibold cursor-pointer flex items-center justify-center gap-2"
+                    onClick={() => {
+                      setSelectedUserId(null);
+                      setScanMessage('Buscando rostro...');
+                    }}
+                  >
+                    <ArrowRight className="w-4 h-4 rotate-185" />
+                    Regresar a Detección Automática
+                  </Button>
+                </motion.div>
+              );
+            })()
           ) : (
             <motion.div
-              key="waiting"
+              key="waiting-list"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="h-full flex flex-col items-center justify-center text-center p-8 bg-white rounded-3xl border-2 border-dashed border-neutral-200"
+              className="flex flex-col h-[480px] bg-white rounded-3xl border border-neutral-200 p-6 shadow-sm overflow-hidden"
             >
-              <div className="w-20 h-20 bg-neutral-100 rounded-full flex items-center justify-center mb-6">
-                <UserCheck size={32} className="text-neutral-300" />
+              {/* Header section with instructions */}
+              <div className="flex flex-col items-center text-center border-b border-neutral-100 pb-4 mb-4 shrink-0">
+                <div className="w-11 h-11 bg-indigo-50 text-indigo-650 rounded-2xl flex items-center justify-center mb-2.5">
+                  <UserCheck size={22} className="text-indigo-600" />
+                </div>
+                <h3 className="text-base font-bold text-neutral-800 leading-tight">Identificación de Asistencia</h3>
+                <p className="text-neutral-400 text-xs mt-1 max-w-xs leading-relaxed">
+                  Colócate frente a la cámara para escaneo automático, o selecciónate abajo para validación manual rápida.
+                </p>
               </div>
-              <h3 className="text-xl font-medium text-neutral-400">Esperando Identificación</h3>
-              <p className="text-neutral-400 text-sm mt-2 max-w-xs">
-                El sistema reconocerá automáticamente tu rostro cuando estés en posición.
-              </p>
+
+              {/* Search bar */}
+              <div className="relative mb-3 shrink-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 w-3.5 h-3.5" />
+                <input 
+                  type="text"
+                  placeholder="Buscar mi nombre / ID..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 border border-neutral-200 rounded-xl focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-xs focus:outline-none transition-all bg-neutral-50/50"
+                />
+              </div>
+
+              {/* Scrollable list of users */}
+              <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 custom-scrollbar">
+                {users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.id.toLowerCase().includes(searchQuery.toLowerCase())).length > 0 ? (
+                  users
+                    .filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.id.toLowerCase().includes(searchQuery.toLowerCase()))
+                    .map(user => (
+                      <motion.div
+                        key={user.id}
+                        whileHover={{ scale: 1.01, backgroundColor: 'rgba(238, 242, 255, 0.3)' }}
+                        whileTap={{ scale: 0.99 }}
+                        onClick={() => {
+                          setSelectedUserId(user.id);
+                          setScanMessage(`Iniciando verificación para ${user.name}...`);
+                          toast.info(`Buscando específicamente a ${user.name}`);
+                        }}
+                        className="flex items-center gap-3 p-2.5 rounded-xl border border-neutral-100 hover:border-indigo-200 cursor-pointer transition-all"
+                      >
+                        {user.image ? (
+                          <img 
+                            src={user.image} 
+                            alt="" 
+                            className="w-9 h-9 rounded-xl object-cover border border-neutral-200 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center text-neutral-400 shrink-0">
+                            <UserCheck size={16} />
+                          </div>
+                        )}
+                        <div className="flex-1 text-left min-w-0">
+                          <p className="font-bold text-xs text-neutral-800 leading-tight truncate">{user.name}</p>
+                          <p className="text-[10px] font-mono text-neutral-400 capitalize mt-0.5">ID: {user.id}</p>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] text-indigo-600 bg-indigo-50/50 border-indigo-100 font-extrabold shrink-0 px-2 py-0.5">
+                          Verificarme
+                        </Badge>
+                      </motion.div>
+                    ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-12 text-neutral-400">
+                    <AlertCircle size={20} className="text-neutral-300 mb-1" />
+                    <p className="text-xs">No se encontraron colaboradores</p>
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
