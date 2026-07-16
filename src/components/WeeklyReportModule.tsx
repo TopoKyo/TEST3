@@ -48,6 +48,7 @@ import { cn } from '@/lib/utils';
 import { firestoreService } from '@/src/lib/firestoreService';
 import { geminiService, getApiKey, saveApiKey } from '@/src/lib/geminiService';
 import { User, WorkLog, WeeklyReport, WeeklyReportTask, WeeklyReportIncident } from '@/src/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -113,6 +114,14 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [customApiKey, setCustomApiKey] = useState('');
 
+  const uniqueProjects = React.useMemo(() => {
+    const projs = new Set<string>();
+    workLogs.forEach(log => {
+      if (log.project && log.project.trim() !== '') projs.add(log.project.trim());
+    });
+    return Array.from(projs).sort();
+  }, [workLogs]);
+
   // General Report State
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
@@ -173,7 +182,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       // Filter worklogs by dates on workspace context
       let filteredLogs = workLogs.filter(log => {
         const dateOk = log.date >= startDate && log.date <= endDate;
-        const projectOk = !selectedProject || log.project?.toLowerCase().includes(selectedProject.toLowerCase()) || log.client?.toLowerCase().includes(selectedProject.toLowerCase());
+        const projectOk = !selectedProject || selectedProject === 'all' || 
+          log.project?.trim() === selectedProject;
         return dateOk && projectOk;
       });
 
@@ -1211,14 +1221,18 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Filtro de Proyecto / Cliente</label>
-                    <input 
-                      type="text"
-                      placeholder="Ej: Torre A, Planta de Lácteos, etc."
-                      value={selectedProject}
-                      onChange={(e) => setSelectedProject(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 rounded-lg px-3 py-2 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
-                    />
+                    <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1.5 block">Filtro de Proyecto</label>
+                    <Select value={selectedProject} onValueChange={setSelectedProject}>
+                      <SelectTrigger className="w-full bg-zinc-50 border-zinc-200">
+                        <SelectValue placeholder="Todos los proyectos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los proyectos</SelectItem>
+                        {uniqueProjects.map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>

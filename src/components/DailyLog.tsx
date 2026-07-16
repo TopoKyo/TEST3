@@ -35,7 +35,8 @@ import {
   Upload,
   RefreshCw,
   Check,
-  ChevronsUpDown
+  ChevronsUpDown,
+  Briefcase
 } from 'lucide-react';
 import { 
   Dialog,
@@ -201,6 +202,22 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [viewMode, setViewMode] = useState<'daily' | 'history'>('daily');
   const videoRef = React.useRef<HTMLVideoElement>(null);
 
+  const uniqueProjects = React.useMemo(() => {
+    const projs = new Set<string>();
+    logs.forEach(log => {
+      if (log.project && log.project.trim() !== '') projs.add(log.project.trim());
+    });
+    return Array.from(projs).sort();
+  }, [logs]);
+
+  const uniqueClients = React.useMemo(() => {
+    const clients = new Set<string>();
+    logs.forEach(log => {
+      if (log.client && log.client.trim() !== '') clients.add(log.client.trim());
+    });
+    return Array.from(clients).sort();
+  }, [logs]);
+
   useEffect(() => {
     if (!cameraOpen) {
       if (stream) {
@@ -272,10 +289,12 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   }, []);
 
   useEffect(() => {
-    const log = logs.find(l => l.date === currentDate);
-    if (log) {
-      setCurrentLog(log);
-      setIsEditing(false);
+    const dailyLogs = logs.filter(l => l.date === currentDate);
+    if (dailyLogs.length > 0) {
+      if (!currentLog || currentLog.date !== currentDate || !dailyLogs.find(l => l.id === currentLog.id)) {
+        setCurrentLog(dailyLogs[0]);
+        setIsEditing(false);
+      }
     } else {
       setCurrentLog(null);
     }
@@ -342,6 +361,22 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     newLog.personnel = activeStaff;
     setCurrentLog(newLog);
     setIsEditing(true);
+  };
+
+  const handleCancel = () => {
+    if (!currentLog) return;
+    const existingLog = logs.find(l => l.id === currentLog.id);
+    if (!existingLog) {
+      const dailyLogs = logs.filter(l => l.date === currentDate);
+      if (dailyLogs.length > 0) {
+        setCurrentLog(dailyLogs[0]);
+      } else {
+        setCurrentLog(null);
+      }
+    } else {
+      setCurrentLog(existingLog);
+    }
+    setIsEditing(false);
   };
 
   const handleSave = async () => {
@@ -737,70 +772,67 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         </div>
 
         {viewMode === 'daily' && (
-          <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-neutral-100">
-            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(subDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
-              <ChevronLeft size={20} />
-            </Button>
-            <div className="flex flex-col px-4 items-center min-w-[200px]">
-               <span className="text-xs font-bold uppercase text-primary/70 tracking-widest leading-none">
-                 {format(parseISO(currentDate), 'EEEE', { locale: es })}
-               </span>
-               <span className="text-lg font-black text-neutral-900">
-                 {format(parseISO(currentDate), 'd \'de\' MMMM, yyyy', { locale: es })}
-               </span>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 bg-white p-2 rounded-2xl shadow-sm border border-neutral-100 w-fit">
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(subDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
+                <ChevronLeft size={20} />
+              </Button>
+              <div className="flex flex-col px-4 items-center min-w-[200px]">
+                 <span className="text-xs font-bold uppercase text-primary/70 tracking-widest leading-none">
+                   {format(parseISO(currentDate), 'EEEE', { locale: es })}
+                 </span>
+                 <span className="text-lg font-black text-neutral-900">
+                   {format(parseISO(currentDate), 'd \'de\' MMMM, yyyy', { locale: es })}
+                 </span>
+              </div>
+              <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(addDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
+                <ChevronRight size={20} />
+              </Button>
             </div>
-            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => setCurrentDate(addDays(parseISO(currentDate), 1).toISOString().split('T')[0])}>
-              <ChevronRight size={20} />
-            </Button>
+            
+            {(() => {
+              const dailyLogs = logs.filter(l => l.date === currentDate);
+              if (dailyLogs.length > 0) {
+                return (
+                  <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                    {dailyLogs.map((log) => (
+                      <Button
+                        key={log.id}
+                        variant={currentLog?.id === log.id ? 'default' : 'outline'}
+                        className="rounded-xl bg-white"
+                        onClick={() => {
+                          setCurrentLog(log);
+                          setIsEditing(false);
+                        }}
+                      >
+                        <Briefcase className="mr-2 h-4 w-4" />
+                        {log.project || `Informe #${log.reportNumber}`}
+                      </Button>
+                    ))}
+                    {!isEditing && (
+                      <Button variant="outline" className="rounded-xl border-dashed bg-white" onClick={handleCreateNew}>
+                        <Plus className="mr-2 h-4 w-4" /> Nuevo en esta fecha
+                      </Button>
+                    )}
+                    {isEditing && !dailyLogs.find(l => l.id === currentLog?.id) && (
+                       <Button variant="default" className="rounded-xl">
+                         <Briefcase className="mr-2 h-4 w-4" />
+                         Nuevo Reporte
+                       </Button>
+                    )}
+                  </div>
+                );
+              }
+              return null;
+            })()}
           </div>
         )}
       </div>
 
       {viewMode === 'history' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AnimatePresence>
-            {logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => (
-              <motion.div
-                key={log.id}
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                whileHover={{ y: -5 }}
-                className="cursor-pointer"
-                onClick={() => {
-                  setCurrentDate(log.date);
-                  setViewMode('daily');
-                }}
-              >
-                <Card className="rounded-[2rem] border-none shadow-xl hover:shadow-2xl transition-all overflow-hidden bg-white h-full border-t-4 border-t-primary">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none px-3 py-1">
-                        Informe #{log.reportNumber}
-                      </Badge>
-                      <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
-                        {format(parseISO(log.date), 'dd/MM/yyyy')}
-                      </span>
-                    </div>
-                    <h3 className="text-xl font-bold text-neutral-900 mb-2 truncate">{log.project}</h3>
-                    <p className="text-sm text-neutral-500 mb-6 line-clamp-1">{log.workAddress}</p>
-                    
-                    <div className="flex items-center justify-between py-3 border-t border-neutral-50">
-                      <div className="flex items-center gap-2">
-                        <Users size={14} className="text-neutral-400" />
-                        <span className="text-xs font-bold text-neutral-600">{log.personnel.length} Pers.</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <TrendingUp size={14} className="text-emerald-500" />
-                        <span className="text-xs font-bold text-emerald-600">{log.advancePercentage}% Avance</span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-          {logs.length === 0 && (
-            <div className="col-span-full py-24 text-center">
+        <div className="space-y-12">
+          {logs.length === 0 ? (
+            <div className="py-24 text-center">
               <div className="p-6 bg-neutral-100 rounded-full w-fit mx-auto text-neutral-300 mb-4">
                 <History size={48} />
               </div>
@@ -809,6 +841,70 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                 Crear el primer reporte
               </Button>
             </div>
+          ) : (
+            (() => {
+              const groupedLogs = logs.reduce((acc, log) => {
+                const proj = log.project?.trim() || 'Sin proyecto asignado';
+                if (!acc[proj]) acc[proj] = [];
+                acc[proj].push(log);
+                return acc;
+              }, {} as Record<string, WorkLog[]>);
+
+              return Object.entries(groupedLogs).sort().map(([project, projectLogs]: [string, WorkLog[]]) => (
+                <div key={project} className="space-y-6">
+                  <div className="flex items-center gap-3 border-b border-neutral-100 pb-3">
+                    <div className="bg-primary/10 p-2.5 rounded-xl text-primary">
+                      <Briefcase size={20} />
+                    </div>
+                    <h2 className="text-2xl font-black text-neutral-800 tracking-tight">{project}</h2>
+                    <Badge variant="secondary" className="ml-2 font-mono text-xs rounded-lg bg-neutral-100">{projectLogs.length} reportes</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <AnimatePresence>
+                      {projectLogs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((log) => (
+                        <motion.div
+                          key={log.id}
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          whileHover={{ y: -5 }}
+                          className="cursor-pointer"
+                          onClick={() => {
+                            setCurrentDate(log.date);
+                            setViewMode('daily');
+                          }}
+                        >
+                          <Card className="rounded-[2rem] border-none shadow-xl hover:shadow-2xl transition-all overflow-hidden bg-white h-full border-t-4 border-t-primary">
+                            <CardContent className="p-6">
+                              <div className="flex justify-between items-start mb-4">
+                                <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none px-3 py-1">
+                                  Informe #{log.reportNumber}
+                                </Badge>
+                                <span className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
+                                  {format(parseISO(log.date), 'dd/MM/yyyy')}
+                                </span>
+                              </div>
+                              <h3 className="text-xl font-bold text-neutral-900 mb-2 truncate">{log.project}</h3>
+                              <p className="text-sm text-neutral-500 mb-6 line-clamp-1">{log.workAddress}</p>
+                              
+                              <div className="flex items-center justify-between py-3 border-t border-neutral-50">
+                                <div className="flex items-center gap-2">
+                                  <Users size={14} className="text-neutral-400" />
+                                  <span className="text-xs font-bold text-neutral-600">{log.personnel.length} Pers.</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <TrendingUp size={14} className="text-emerald-500" />
+                                  <span className="text-xs font-bold text-emerald-600">{log.advancePercentage}% Avance</span>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              ));
+            })()
           )}
         </div>
       ) : (
@@ -857,7 +953,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
               </Button>
               {isEditing ? (
                 <>
-                  <Button variant="ghost" className="rounded-xl" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                  <Button variant="ghost" className="rounded-xl" onClick={handleCancel}>Cancelar</Button>
                   <Button className="rounded-xl px-8 shadow-md" onClick={handleSave}>
                     <Save className="mr-2 h-4 w-4" /> Guardar Informe
                   </Button>
@@ -878,11 +974,29 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <Label>Proyecto</Label>
-                    <Input value={currentLog?.project || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, project: e.target.value} : null)} className="rounded-xl" />
+                    <Input 
+                      value={currentLog?.project || ''} 
+                      disabled={!isEditing} 
+                      onChange={e => setCurrentLog(l => l ? {...l, project: e.target.value} : null)} 
+                      className="rounded-xl" 
+                      list="project-list"
+                    />
+                    <datalist id="project-list">
+                      {uniqueProjects.map(p => <option key={p} value={p} />)}
+                    </datalist>
                   </div>
                   <div className="space-y-2">
                     <Label>Cliente</Label>
-                    <Input value={currentLog?.client || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, client: e.target.value} : null)} className="rounded-xl" />
+                    <Input 
+                      value={currentLog?.client || ''} 
+                      disabled={!isEditing} 
+                      onChange={e => setCurrentLog(l => l ? {...l, client: e.target.value} : null)} 
+                      className="rounded-xl" 
+                      list="client-list"
+                    />
+                    <datalist id="client-list">
+                      {uniqueClients.map(c => <option key={c} value={c} />)}
+                    </datalist>
                   </div>
                   <div className="space-y-2">
                     <Label>Jefe Residente</Label>

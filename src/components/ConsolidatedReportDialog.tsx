@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   FileBarChart, 
   Calendar, 
@@ -52,11 +53,21 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
   const [activeTab, setActiveTab] = useState('generate');
   const [startDate, setStartDate] = useState(format(subDays(new Date(), 7), 'yyyy-MM-dd'));
   const [endDate, setEndDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [selectedProject, setSelectedProject] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingContext, setIsSavingContext] = useState(false);
   const [reportData, setReportData] = useState<any>(null);
   const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [customApiKey, setCustomApiKey] = useState('');
+  
+  const uniqueProjects = React.useMemo(() => {
+    const projs = new Set<string>();
+    workLogs.forEach(log => {
+      if (log.project && log.project.trim() !== '') projs.add(log.project.trim());
+    });
+    return Array.from(projs).sort();
+  }, [workLogs]);
+
   const [projectContext, setProjectContext] = useState<ProjectContext>({
     id: 'projectContext',
     name: 'Nombre del Proyecto',
@@ -165,12 +176,15 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
   const generateReport = async () => {
     setIsGenerating(true);
     try {
-      const filteredLogs = workLogs.filter(log => 
-        isWithinInterval(parseISO(log.date), {
+      const filteredLogs = workLogs.filter(log => {
+        const dateOk = isWithinInterval(parseISO(log.date), {
           start: startOfDay(parseISO(startDate)),
           end: endOfDay(parseISO(endDate))
-        })
-      );
+        });
+        const projectOk = !selectedProject || selectedProject === 'all' || 
+          log.project?.trim() === selectedProject;
+        return dateOk && projectOk;
+      });
 
       if (filteredLogs.length === 0) {
         toast.error('No se encontraron bitácoras en el rango seleccionado');
@@ -382,6 +396,21 @@ export default function ConsolidatedReportDialog({ workLogs, trigger }: Consolid
                         {p.label}
                       </Button>
                     ))}
+                  </div>
+
+                  <div className="space-y-2.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-neutral-400 ml-1">Filtro de Proyecto</Label>
+                    <Select value={selectedProject} onValueChange={setSelectedProject}>
+                      <SelectTrigger className="w-full rounded-xl h-12 border-neutral-100 bg-neutral-50/50 focus:bg-white transition-all font-medium">
+                        <SelectValue placeholder="Todos los proyectos" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los proyectos</SelectItem>
+                        {uniqueProjects.map(p => (
+                          <SelectItem key={p} value={p}>{p}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className="grid grid-cols-2 gap-6">
