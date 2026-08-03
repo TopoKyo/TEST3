@@ -33,7 +33,9 @@ import {
   PackageCheck,
   Printer,
   Sparkles,
-  FileText
+  FileText,
+  X,
+  RotateCcw
 } from 'lucide-react';
 import { Product, InventoryMovement, User, MovementType, EPPDelivery } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
@@ -73,6 +75,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
   const [eppSubTab, setEppSubTab] = useState<'inventory' | 'deliveries'>('inventory');
   const [eppSearchTerm, setEppSearchTerm] = useState('');
   const [isEPPDeliveryDialogOpen, setIsEPPDeliveryDialogOpen] = useState(false);
+  const [isEPPReturnDialogOpen, setIsEPPReturnDialogOpen] = useState(false);
   const [isEPPCountAuditOpen, setIsEPPCountAuditOpen] = useState(false);
   const [physicalCounts, setPhysicalCounts] = useState<Record<string, { count: number; note: string }>>({});
   const [selectedEppDeliveryForReceipt, setSelectedEppDeliveryForReceipt] = useState<EPPDelivery | null>(null);
@@ -86,6 +89,18 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     userId: '',
     customRecipientName: '',
     deliveredBy: '',
+    observation: ''
+  });
+
+  // EPP return form
+  const [eppReturnForm, setEppReturnForm] = useState({
+    productId: '',
+    quantity: 1,
+    size: 'Estándar',
+    condition: 'Buen estado (Reutilizable)',
+    userId: '',
+    customRecipientName: '',
+    receivedBy: '',
     observation: ''
   });
 
@@ -422,6 +437,102 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     }
   };
 
+  // EPP Return / Devolución Handler
+  const handleReturnEPP = async () => {
+    if (!eppReturnForm.productId) {
+      toast.error('Por favor selecciona el EPP que se devuelve');
+      return;
+    }
+    if (eppReturnForm.quantity <= 0) {
+      toast.error('La cantidad a devolver debe ser mayor a 0');
+      return;
+    }
+
+    let recipientName = '';
+    let recipientId = eppReturnForm.userId;
+
+    if (eppReturnForm.userId) {
+      const selectedUser = users.find(u => u.id === eppReturnForm.userId);
+      if (selectedUser) recipientName = selectedUser.name;
+    }
+
+    if (!recipientName && eppReturnForm.customRecipientName.trim()) {
+      recipientName = eppReturnForm.customRecipientName.trim();
+      recipientId = `worker-${Math.random().toString(36).substr(2, 6)}`;
+    }
+
+    if (!recipientName && recognizedUser) {
+      recipientId = recognizedUser.id;
+      recipientName = recognizedUser.name;
+    }
+
+    if (!recipientName) {
+      toast.error('Por favor selecciona o ingresa el nombre del trabajador que regresa el EPP');
+      return;
+    }
+
+    const product = products.find(p => p.id === eppReturnForm.productId);
+    if (!product) return;
+
+    try {
+      const timestamp = new Date().toISOString();
+
+      const returnRecord: EPPDelivery = {
+        id: `RET-${Math.random().toString(36).substr(2, 7).toUpperCase()}`,
+        productId: product.id,
+        productName: product.name,
+        quantity: eppReturnForm.quantity,
+        recipientId,
+        recipientName,
+        deliveredByName: eppReturnForm.receivedBy || 'Bodega / Supervisor',
+        timestamp,
+        size: eppReturnForm.size || 'Estándar',
+        condition: `DEVOLUCIÓN: ${eppReturnForm.condition}`,
+        observation: `[REGRESO / DEVOLUCIÓN A BODEGA] ${eppReturnForm.observation || ''}`.trim()
+      };
+
+      await firestoreService.add('eppDeliveries', returnRecord);
+
+      const movementRecord: InventoryMovement = {
+        id: Math.random().toString(36).substr(2, 9),
+        productId: product.id,
+        productName: product.name,
+        type: 'entry',
+        quantity: eppReturnForm.quantity,
+        userId: recipientId,
+        userName: recipientName,
+        timestamp,
+        reason: `Regreso / Devolución EPP (${eppReturnForm.condition}) - Devuelto por: ${recipientName}`,
+        observation: eppReturnForm.observation,
+        isEppDelivery: true,
+        eppSize: eppReturnForm.size,
+        eppCondition: eppReturnForm.condition
+      };
+
+      await firestoreService.add('inventoryMovements', movementRecord);
+
+      toast.success(`Regreso de EPP (${product.name}) de ${recipientName} registrado (+${eppReturnForm.quantity} en stock)`);
+      setIsEPPReturnDialogOpen(false);
+      setRecognizedUser(null);
+      setIsScanning(false);
+      setEppReturnForm({
+        productId: '',
+        quantity: 1,
+        size: 'Estándar',
+        condition: 'Buen estado (Reutilizable)',
+        userId: '',
+        customRecipientName: '',
+        receivedBy: '',
+        observation: ''
+      });
+      fetchData();
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error(error);
+      toast.error('Error al registrar el regreso de EPP');
+    }
+  };
+
   // EPP Stock Count Audit ("Hacer Inventario")
   const handleApplyEPPInventoryAudit = async () => {
     const eppProds = products.filter(isEPPProduct);
@@ -479,7 +590,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     let isProcessing = false;
     let frameCount = 0;
 
-    if (isScanning && (movementType === 'exit' || isEPPDeliveryDialogOpen)) {
+    if (isScanning && (movementType === 'exit' || isEPPDeliveryDialogOpen || isEPPReturnDialogOpen)) {
       const startCam = async () => {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ 
@@ -543,7 +654,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
       stream?.getTracks().forEach(t => t.stop());
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [isScanning, movementType, isEPPDeliveryDialogOpen, users]);
+  }, [isScanning, movementType, isEPPDeliveryDialogOpen, isEPPReturnDialogOpen, users]);
 
   const exportData = (type: 'products' | 'epp_products' | 'movements' | 'epp') => {
     let data: any[] = [];
@@ -1141,6 +1252,26 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                 </Button>
 
                 <Button 
+                  className="rounded-2xl h-12 px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold shadow-lg gap-2"
+                  onClick={() => {
+                    setEppReturnForm({
+                      productId: eppProducts[0]?.id || '',
+                      quantity: 1,
+                      size: 'Estándar',
+                      condition: 'Buen estado (Reutilizable)',
+                      userId: '',
+                      customRecipientName: '',
+                      receivedBy: '',
+                      observation: ''
+                    });
+                    setIsEPPReturnDialogOpen(true);
+                  }}
+                >
+                  <RotateCcw size={18} />
+                  <span>Regreso / Devolución EPP</span>
+                </Button>
+
+                <Button 
                   className="rounded-2xl h-12 px-6 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg gap-2"
                   onClick={() => {
                     const counts: Record<string, { count: number; note: string }> = {};
@@ -1435,14 +1566,37 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                             </TableCell>
                             <TableCell className="text-xs text-neutral-600">{d.deliveredByName || 'Bodega'}</TableCell>
                             <TableCell className="text-center pr-6">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                className="h-8 rounded-xl text-xs font-bold gap-1 border-neutral-200"
-                                onClick={() => setSelectedEppDeliveryForReceipt(d)}
-                              >
-                                <FileText size={14} /> Ver
-                              </Button>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8 rounded-xl text-xs font-bold gap-1 border-neutral-200"
+                                  onClick={() => setSelectedEppDeliveryForReceipt(d)}
+                                >
+                                  <FileText size={14} /> Ver
+                                </Button>
+                                <Button 
+                                  variant="outline" 
+                                  size="sm" 
+                                  className="h-8 rounded-xl text-xs font-bold gap-1 border-emerald-200 text-emerald-800 bg-emerald-50/60 hover:bg-emerald-100"
+                                  onClick={() => {
+                                    setEppReturnForm({
+                                      productId: d.productId || eppProducts.find(p => p.name === d.productName)?.id || eppProducts[0]?.id || '',
+                                      quantity: d.quantity || 1,
+                                      size: d.size || 'Estándar',
+                                      condition: 'Buen estado (Reutilizable)',
+                                      userId: d.recipientId || '',
+                                      customRecipientName: d.recipientName || '',
+                                      receivedBy: '',
+                                      observation: `Regreso de EPP (${d.productName})`
+                                    });
+                                    setIsEPPReturnDialogOpen(true);
+                                  }}
+                                  title="Registrar devolución de este EPP"
+                                >
+                                  <RotateCcw size={13} /> Regreso
+                                </Button>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))}
@@ -1538,8 +1692,24 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
           setIsScanning(false);
         }
       }}>
-        <DialogContent className="rounded-3xl p-8 max-w-2xl">
-          <DialogHeader className="mb-4 px-0 text-left">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-2xl relative overflow-hidden">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => {
+              setIsEPPDeliveryDialogOpen(false);
+              setRecognizedUser(null);
+              setIsScanning(false);
+            }}
+            title="Cerrar ventana"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+
+          <DialogHeader className="mb-4 px-0 text-left pr-12">
             <DialogTitle className="text-2xl font-bold tracking-tight flex items-center gap-2 text-amber-950">
               <ShieldCheck className="text-amber-600" size={28} />
               Entregar EPP a Trabajador
@@ -1750,13 +1920,284 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
             </div>
           </div>
 
-          <DialogFooter className="mt-6 pt-4 border-t border-neutral-100 gap-2">
-            <Button variant="ghost" className="rounded-xl h-11" onClick={() => setIsEPPDeliveryDialogOpen(false)}>Cancelar</Button>
+          <DialogFooter className="mt-6 pt-4 border-t border-neutral-100 gap-3 flex-col-reverse sm:flex-row">
             <Button 
-              className="rounded-xl h-11 px-8 shadow-lg font-bold bg-amber-600 hover:bg-amber-700 text-white"
+              type="button"
+              variant="outline" 
+              className="rounded-xl h-12 px-6 border-neutral-300 font-bold text-neutral-800 hover:bg-neutral-100 w-full sm:w-auto" 
+              onClick={() => {
+                setIsEPPDeliveryDialogOpen(false);
+                setRecognizedUser(null);
+                setIsScanning(false);
+              }}
+            >
+              <X className="mr-2 h-5 w-5 text-neutral-500" /> Cancelar / Cerrar
+            </Button>
+            <Button 
+              type="button"
+              className="rounded-xl h-12 px-8 shadow-lg font-bold bg-amber-600 hover:bg-amber-700 text-white w-full sm:flex-1"
               onClick={handleDeliverEPP}
             >
-              <CheckCircle2 className="mr-2 h-4 w-4" /> Confirmar Entrega de EPP
+              <CheckCircle2 className="mr-2 h-5 w-5" /> Confirmar Entrega de EPP
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG 1.5: REGRESO / DEVOLUCIÓN DE EPP */}
+      <Dialog open={isEPPReturnDialogOpen} onOpenChange={(open) => {
+        setIsEPPReturnDialogOpen(open);
+        if (!open) {
+          setRecognizedUser(null);
+          setIsScanning(false);
+        }
+      }}>
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-2xl relative overflow-hidden">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => {
+              setIsEPPReturnDialogOpen(false);
+              setRecognizedUser(null);
+              setIsScanning(false);
+            }}
+            title="Cerrar ventana"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+
+          <DialogHeader className="mb-4 px-0 text-left pr-12">
+            <DialogTitle className="text-2xl font-bold tracking-tight flex items-center gap-2 text-emerald-950">
+              <RotateCcw className="text-emerald-600" size={28} />
+              Regreso / Devolución de EPP a Bodega
+            </DialogTitle>
+            <DialogDescription>
+              Registra el reingreso de Equipo de Protección Personal devuelto por el trabajador. El stock disponible aumentará automáticamente.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="font-bold">Elemento de EPP que Devuelve</Label>
+                <Select 
+                  value={eppReturnForm.productId} 
+                  onValueChange={v => setEppReturnForm({ ...eppReturnForm, productId: v })}
+                >
+                  <SelectTrigger className="rounded-xl h-11 border-neutral-200 bg-neutral-50">
+                    <SelectValue placeholder="Seleccionar EPP..." />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl max-h-60">
+                    {eppProducts.map(p => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} (Stock Actual: {getStock(p.id)} {p.unit})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label className="font-bold">Cantidad a Devolver</Label>
+                  <Input 
+                    type="number"
+                    min={1}
+                    value={eppReturnForm.quantity}
+                    onChange={e => setEppReturnForm({ ...eppReturnForm, quantity: Number(e.target.value) })}
+                    className="rounded-xl h-11 border-neutral-200"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="font-bold">Talla / Medida</Label>
+                  <Select 
+                    value={eppReturnForm.size} 
+                    onValueChange={v => setEppReturnForm({ ...eppReturnForm, size: v })}
+                  >
+                    <SelectTrigger className="rounded-xl h-11 border-neutral-200">
+                      <SelectValue placeholder="Talla" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl">
+                      <SelectItem value="Estándar">Estándar / Única</SelectItem>
+                      <SelectItem value="S">Talla S</SelectItem>
+                      <SelectItem value="M">Talla M</SelectItem>
+                      <SelectItem value="L">Talla L</SelectItem>
+                      <SelectItem value="XL">Talla XL</SelectItem>
+                      <SelectItem value="XXL">Talla XXL</SelectItem>
+                      <SelectItem value="38">Talla 38 (Calzado)</SelectItem>
+                      <SelectItem value="39">Talla 39 (Calzado)</SelectItem>
+                      <SelectItem value="40">Talla 40 (Calzado)</SelectItem>
+                      <SelectItem value="41">Talla 41 (Calzado)</SelectItem>
+                      <SelectItem value="42">Talla 42 (Calzado)</SelectItem>
+                      <SelectItem value="43">Talla 43 (Calzado)</SelectItem>
+                      <SelectItem value="44">Talla 44 (Calzado)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">Estado / Condición del EPP Devuelto</Label>
+                <Select 
+                  value={eppReturnForm.condition} 
+                  onValueChange={v => setEppReturnForm({ ...eppReturnForm, condition: v })}
+                >
+                  <SelectTrigger className="rounded-xl h-11 border-neutral-200">
+                    <SelectValue placeholder="Condición del EPP" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl">
+                    <SelectItem value="Buen estado (Reutilizable)">Buen estado (Reutilizable)</SelectItem>
+                    <SelectItem value="Usado / Limpio">Usado / Limpio</SelectItem>
+                    <SelectItem value="Dañado / Para baja">Dañado / Para baja</SelectItem>
+                    <SelectItem value="Incompleto">Incompleto</SelectItem>
+                    <SelectItem value="Talla incorrecta / Cambio">Talla incorrecta / Cambio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">Motivo / Observaciones del Regreso</Label>
+                <Input 
+                  value={eppReturnForm.observation}
+                  onChange={e => setEppReturnForm({ ...eppReturnForm, observation: e.target.value })}
+                  placeholder="Ej: Término de contrato / Cambio por rotura..."
+                  className="rounded-xl h-11 border-neutral-200"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="font-bold">Recibido Por (Bodeguero / Supervisor)</Label>
+                <Input 
+                  value={eppReturnForm.receivedBy}
+                  onChange={e => setEppReturnForm({ ...eppReturnForm, receivedBy: e.target.value })}
+                  placeholder="Ej: Juan Pérez (Jefe de Bodega)"
+                  className="rounded-xl h-11 border-neutral-200"
+                />
+              </div>
+            </div>
+
+            {/* WORKER SELECTION SIDE */}
+            <div className="space-y-4 flex flex-col justify-between">
+              <div className="space-y-3 bg-emerald-50/70 p-4 rounded-2xl border border-emerald-200/80">
+                <Label className="font-bold flex items-center gap-2 text-emerald-950 text-base">
+                  <UserCheck size={20} className="text-emerald-600" />
+                  Trabajador que Regresa el EPP
+                </Label>
+                <p className="text-xs text-emerald-900/80">
+                  Selecciona el trabajador que devuelve el equipo o escribe su nombre.
+                </p>
+
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs font-semibold text-neutral-700">Seleccionar Trabajador</Label>
+                  <Select 
+                    value={eppReturnForm.userId} 
+                    onValueChange={v => {
+                      setEppReturnForm({ ...eppReturnForm, userId: v, customRecipientName: '' });
+                      setRecognizedUser(null);
+                    }}
+                  >
+                    <SelectTrigger className="rounded-xl h-11 border-emerald-200 bg-white shadow-sm font-medium">
+                      <SelectValue placeholder="-- Elegir Trabajador --" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl max-h-60">
+                      {users.map(u => (
+                        <SelectItem key={u.id} value={u.id}>
+                          <span className="font-bold">{u.name}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 my-1">
+                  <div className="h-[1px] bg-emerald-200 flex-1"></div>
+                  <span className="text-[10px] font-bold text-emerald-700 uppercase">o escribe nombre</span>
+                  <div className="h-[1px] bg-emerald-200 flex-1"></div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-neutral-700">Nombre del Trabajador</Label>
+                  <Input 
+                    value={eppReturnForm.customRecipientName}
+                    onChange={e => setEppReturnForm({ ...eppReturnForm, customRecipientName: e.target.value, userId: '' })}
+                    placeholder="Ej: Pedro González"
+                    className="rounded-xl h-10 border-emerald-200 bg-white"
+                  />
+                </div>
+
+                {/* WORKER SELECTED CONFIRMATION CARD */}
+                {(eppReturnForm.userId || eppReturnForm.customRecipientName || recognizedUser) && (
+                  <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-300 shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
+                      {(eppReturnForm.customRecipientName || users.find(u => u.id === eppReturnForm.userId)?.name || recognizedUser?.name || '?').charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-emerald-950 truncate">
+                        {eppReturnForm.customRecipientName || users.find(u => u.id === eppReturnForm.userId)?.name || recognizedUser?.name}
+                      </p>
+                      <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold border-none px-2 py-0">
+                        Persona Devuelve EPP
+                      </Badge>
+                    </div>
+                    <CheckCircle2 className="text-emerald-600 h-5 w-5 shrink-0" />
+                  </div>
+                )}
+
+                {/* OPTIONAL CAMERA SCANNER BUTTON */}
+                <div className="pt-2 border-t border-emerald-200/60">
+                  {!isScanning ? (
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      className="w-full rounded-xl text-xs font-semibold border-emerald-300 text-emerald-900 bg-white/80 hover:bg-emerald-100/50 gap-1.5"
+                      onClick={() => setIsScanning(true)}
+                    >
+                      <Camera size={14} /> Usar Reconocimiento Facial
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="w-full h-36 bg-black rounded-xl overflow-hidden relative">
+                        <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="w-full text-xs text-rose-600 h-7"
+                        onClick={() => setIsScanning(false)}
+                      >
+                        Cerrar Cámara
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="mt-6 pt-4 border-t border-neutral-100 gap-3 flex-col-reverse sm:flex-row">
+            <Button 
+              type="button"
+              variant="outline" 
+              className="rounded-xl h-12 px-6 border-neutral-300 font-bold text-neutral-800 hover:bg-neutral-100 w-full sm:w-auto" 
+              onClick={() => {
+                setIsEPPReturnDialogOpen(false);
+                setRecognizedUser(null);
+                setIsScanning(false);
+              }}
+            >
+              <X className="mr-2 h-5 w-5 text-neutral-500" /> Cancelar / Cerrar
+            </Button>
+            <Button 
+              type="button"
+              className="rounded-xl h-12 px-8 shadow-lg font-bold bg-emerald-600 hover:bg-emerald-700 text-white w-full sm:flex-1"
+              onClick={handleReturnEPP}
+            >
+              <RotateCcw className="mr-2 h-5 w-5" /> Confirmar Regreso de EPP
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1764,8 +2205,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       {/* DIALOG 2: HACER INVENTARIO (CONTEO Y AUDITORIA DE EPP) */}
       <Dialog open={isEPPCountAuditOpen} onOpenChange={setIsEPPCountAuditOpen}>
-        <DialogContent className="rounded-3xl p-8 max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-4 px-0 text-left">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-4xl max-h-[90vh] overflow-y-auto relative">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => setIsEPPCountAuditOpen(false)}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+          <DialogHeader className="mb-4 px-0 text-left pr-12">
             <DialogTitle className="text-2xl font-bold tracking-tight flex items-center gap-2 text-blue-950">
               <ClipboardList className="text-blue-600" size={28} />
               Hacer Inventario de EPP (Conteo Físico)
@@ -1895,7 +2347,18 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       {/* DIALOG 3: COMPROBANTE DE ENTREGA DE EPP */}
       <Dialog open={!!selectedEppDeliveryForReceipt} onOpenChange={() => setSelectedEppDeliveryForReceipt(null)}>
-        <DialogContent className="rounded-3xl p-8 max-w-lg">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-lg relative">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => setSelectedEppDeliveryForReceipt(null)}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
           {selectedEppDeliveryForReceipt && (
             <div className="space-y-6">
               <div className="text-center border-b pb-4 space-y-1">
@@ -1969,8 +2432,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       {/* DIALOG 4: PRODUCT DIALOG (NUEVO / EDITAR PRODUCTO O EPP) */}
       <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-        <DialogContent className="rounded-3xl p-8 max-w-lg">
-          <DialogHeader className="mb-6 px-0 text-left">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-lg relative">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => setIsProductDialogOpen(false)}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+          <DialogHeader className="mb-6 px-0 text-left pr-12">
             <DialogTitle className="text-2xl font-bold tracking-tight">
               {editingProduct 
                 ? 'Editar Producto / EPP' 
@@ -2124,8 +2598,23 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
           setMovementForm({ ...movementForm, userId: '', observation: '', reason: '' });
         }
       }}>
-        <DialogContent className="rounded-3xl p-8 max-w-2xl">
-          <DialogHeader className="mb-6 px-0 text-left">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-2xl relative">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => {
+              setIsMovementDialogOpen(false);
+              setRecognizedUser(null);
+              setIsScanning(false);
+            }}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+          <DialogHeader className="mb-6 px-0 text-left pr-12">
             <DialogTitle className="text-3xl font-bold tracking-tight">
               {movementType === 'entry' ? 'Registrar Entrada de Bodega' : 'Registrar Salida de Bodega'}
             </DialogTitle>
@@ -2274,8 +2763,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       {/* DIALOG 6: IMPORT PREVIEW DIALOG */}
       <Dialog open={isImportPreviewOpen} onOpenChange={setIsImportPreviewOpen}>
-        <DialogContent className="rounded-3xl p-8 max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="mb-6 px-0 text-left">
+        <DialogContent className="rounded-3xl p-6 sm:p-8 max-w-4xl max-h-[90vh] overflow-y-auto relative">
+          <Button 
+            type="button" 
+            variant="ghost" 
+            size="icon" 
+            className="absolute top-4 right-4 h-12 w-12 rounded-full bg-neutral-100 hover:bg-rose-100 text-neutral-600 hover:text-rose-700 border border-neutral-200 shadow-sm flex items-center justify-center z-50 cursor-pointer" 
+            onClick={() => setIsImportPreviewOpen(false)}
+            title="Cerrar"
+            aria-label="Cerrar"
+          >
+            <X size={24} />
+          </Button>
+          <DialogHeader className="mb-6 px-0 text-left pr-12">
             <DialogTitle className="text-3xl font-bold tracking-tight">Previsualización de Importación</DialogTitle>
             <DialogDescription>
               Hemos analizado el archivo. Revisa los datos y posibles errores antes de confirmar.
