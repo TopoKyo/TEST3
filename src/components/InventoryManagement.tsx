@@ -545,7 +545,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     };
   }, [isScanning, movementType, isEPPDeliveryDialogOpen, users]);
 
-  const exportData = (type: 'products' | 'movements' | 'epp') => {
+  const exportData = (type: 'products' | 'epp_products' | 'movements' | 'epp') => {
     let data: any[] = [];
     let sheetName = 'Export';
 
@@ -559,6 +559,16 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         Ubicación: p.location || '-',
         Stock: getStock(p.id)
       }));
+    } else if (type === 'epp_products') {
+      sheetName = 'Inventario_EPP';
+      data = products.filter(isEPPProduct).map(p => ({
+        ID_EPP: p.id,
+        Elemento_Proteccion: p.name,
+        Categoria: p.category || 'EPP',
+        Unidad: p.unit,
+        Ubicacion: p.location || 'Bodega General',
+        Stock_Actual: getStock(p.id)
+      }));
     } else if (type === 'movements') {
       sheetName = 'Movimientos';
       data = movements.map(m => ({
@@ -571,23 +581,32 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
       }));
     } else if (type === 'epp') {
       sheetName = 'Entregas_EPP';
-      data = eppDeliveries.map(d => ({
+      // Filter strictly for EPP delivery records
+      const eppProductIds = new Set(products.filter(isEPPProduct).map(p => p.id));
+      const onlyEPPDeliveries = eppDeliveries.filter(d => {
+        if (!d.productId) return true;
+        const prod = products.find(p => p.id === d.productId);
+        return !prod || isEPPProduct(prod);
+      });
+
+      data = onlyEPPDeliveries.map(d => ({
         ID_Entrega: d.id,
-        Fecha: format(parseISO(d.timestamp), 'PPpp', { locale: es }),
-        Trabajador: d.recipientName,
-        EPP: d.productName,
+        Fecha_Entrega: format(parseISO(d.timestamp), 'PPpp', { locale: es }),
+        Trabajador_Receptor: d.recipientName,
+        Elemento_EPP: d.productName,
         Cantidad: d.quantity,
         Talla: d.size || 'Estándar',
-        Condición: d.condition || 'Nuevo',
-        Supervisor: d.deliveredByName || '-',
-        Observación: d.observation || '-'
+        Condicion: d.condition || 'Nuevo',
+        Entregado_Por: d.deliveredByName || 'Bodega / Supervisor',
+        Observacion: d.observation || '-'
       }));
     }
 
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    XLSX.writeFile(wb, `${type}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
+    const filename = type === 'epp' ? 'Entregas_EPP' : type === 'epp_products' ? 'Inventario_EPP' : type;
+    XLSX.writeFile(wb, `${filename}_${format(new Date(), 'yyyyMMdd')}.xlsx`);
   };
 
   const importProducts = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1205,7 +1224,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                   <Sparkles className="mr-1.5 h-3.5 w-3.5" /> Cargar EPP Base de Obra
                 </Button>
               )}
-              <Button variant="outline" className="rounded-xl border-neutral-200 h-10 text-xs gap-1.5" onClick={() => exportData(eppSubTab === 'inventory' ? 'products' : 'epp')}>
+              <Button variant="outline" className="rounded-xl border-neutral-200 h-10 text-xs gap-1.5" onClick={() => exportData(eppSubTab === 'inventory' ? 'epp_products' : 'epp')}>
                 <Download size={14} /> Exportar
               </Button>
             </div>

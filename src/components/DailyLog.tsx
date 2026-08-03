@@ -66,6 +66,7 @@ import {
   ProblemEntry, 
   PlanEntry, 
   SafetyChecklist,
+  SafetyTicket,
   AttendanceLog
 } from '@/src/types';
 import { compressImage } from '../lib/imageUtils';
@@ -182,7 +183,8 @@ const EMPTY_LOG: Omit<WorkLog, 'id' | 'date'> = {
     orderAndCleanliness: false,
     correctionsDone: false,
     observations: '',
-    incidents: ''
+    incidents: '',
+    tickets: []
   },
   problems: [],
   nextDayPlan: []
@@ -197,6 +199,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [cameraOpen, setCameraOpen] = useState(false);
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const [activeProblemId, setActiveProblemId] = useState<string | null>(null);
+  const [activeSafetyTicketId, setActiveSafetyTicketId] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [viewMode, setViewMode] = useState<'daily' | 'history'>('daily');
@@ -261,7 +264,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   };
 
   const capturePhoto = async () => {
-    if (videoRef.current && (activeActivityId || activeProblemId)) {
+    if (videoRef.current && (activeActivityId || activeProblemId || activeSafetyTicketId)) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
@@ -273,15 +276,82 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         const compressed = await compressImage(dataUrl, 800, 0.6);
         if (activeActivityId) updateItem('activities', activeActivityId, 'image', compressed);
         else if (activeProblemId) updateItem('problems', activeProblemId, 'image', compressed);
+        else if (activeSafetyTicketId) updateSafetyTicket(activeSafetyTicketId, 'image', compressed);
       } catch (e) {
         if (activeActivityId) updateItem('activities', activeActivityId, 'image', dataUrl);
         else if (activeProblemId) updateItem('problems', activeProblemId, 'image', dataUrl);
+        else if (activeSafetyTicketId) updateSafetyTicket(activeSafetyTicketId, 'image', dataUrl);
       }
       
       setCameraOpen(false);
       setActiveActivityId(null);
       setActiveProblemId(null);
+      setActiveSafetyTicketId(null);
     }
+  };
+
+  const addSafetyTicket = () => {
+    if (!currentLog) return;
+    const currentTickets = currentLog.safety?.tickets || [];
+    const newTicket: SafetyTicket = {
+      id: Math.random().toString(36).substr(2, 6),
+      number: currentTickets.length + 1,
+      type: 'hallazgo',
+      title: '',
+      description: '',
+      severity: 'Media',
+      responsible: '',
+      status: 'Abierto',
+      actionRequired: '',
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        tickets: [...currentTickets, newTicket]
+      }
+    });
+  };
+
+  const updateSafetyTicket = (id: string, field: string, value: any) => {
+    if (!currentLog) return;
+    const currentTickets = currentLog.safety?.tickets || [];
+    const updated = currentTickets.map(t => t.id === id ? { ...t, [field]: value } : t);
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        tickets: updated
+      }
+    });
+  };
+
+  const removeSafetyTicket = (id: string) => {
+    if (!currentLog) return;
+    const currentTickets = currentLog.safety?.tickets || [];
+    const filtered = currentTickets.filter(t => t.id !== id);
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        tickets: filtered
+      }
+    });
+  };
+
+  const handleSafetyTicketImage = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const compressed = await compressImage(base64, 800, 0.6);
+        updateSafetyTicket(id, 'image', compressed);
+      } catch (e) {
+        updateSafetyTicket(id, 'image', base64);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   useEffect(() => {
@@ -678,7 +748,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     // Safety
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 5,
-      head: [['SEGURIDAD Y SSO', 'ESTADO']],
+      head: [['CHECKLIST SEGURIDAD Y SSO', 'ESTADO']],
       body: [
         ['Charla 5 min:', currentLog.safety.morningTalk ? 'SÍ' : 'NO'],
         ['EPP Completo:', currentLog.safety.eppUsage ? 'SÍ' : 'NO'],
@@ -688,6 +758,30 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       ],
       theme: 'grid'
     });
+
+    if (currentLog.safety.tickets && currentLog.safety.tickets.length > 0) {
+      const ticketBody = currentLog.safety.tickets.map(t => [
+        `#${t.number}`,
+        (t.type || 'hallazgo').toUpperCase(),
+        `${t.title ? t.title + ': ' : ''}${t.description || '-'}`,
+        t.severity || 'Media',
+        t.status || 'Abierto',
+        t.responsible || '-',
+        t.actionRequired || '-'
+      ]);
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 5,
+        head: [
+          [{ content: 'TICKETS Y REGISTROS DE SEGURIDAD (SSO)', colSpan: 7, styles: { halign: 'center', fillColor: [217, 119, 6] } }],
+          ['N°', 'TIPO', 'ASUNTO / HALLAZGO', 'SEVERIDAD', 'ESTADO', 'RESPONSABLE', 'ACCIÓN CORRECTIVA']
+        ],
+        body: ticketBody,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' }
+      });
+    }
 
     // Problems and Deviations
     const problemBody = currentLog.problems.length > 0 
@@ -1479,21 +1573,263 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
 
                {/* Section 5: Seguridad (SSO) */}
                <LogSection title="Seguridad y SSO" icon={<HardHat />} isEditing={isEditing}>
-                  <div className="space-y-4">
+                  <div className="space-y-6">
                      <div className="flex flex-col gap-3 p-4 bg-white rounded-2xl border border-neutral-100 shadow-sm">
+                        <Label className="font-bold text-xs text-neutral-500 uppercase tracking-wider mb-1">Checklist de Cumplimiento Diario</Label>
                         <CheckItem label="Charla 5 min" checked={currentLog?.safety.morningTalk ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, morningTalk: v}} : null)} />
                         <CheckItem label="EPP Completo" checked={currentLog?.safety.eppUsage ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, eppUsage: v}} : null)} />
                         <CheckItem label="Revisión Asistencia" checked={currentLog?.safety.attendanceReview ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, attendanceReview: v}} : null)} />
                         <CheckItem label="Coord. Segura" checked={currentLog?.safety.taskCoordination ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, taskCoordination: v}} : null)} />
                         <CheckItem label="Orden y Limpieza" checked={currentLog?.safety.orderAndCleanliness ?? false} disabled={!isEditing} onChange={v => setCurrentLog(l => l ? {...l, safety: {...l.safety, orderAndCleanliness: v}} : null)} />
                      </div>
-                     <div className="space-y-2">
-                        <Label>Incidentes del día</Label>
-                        <Input value={currentLog?.safety.incidents || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, incidents: e.target.value}} : null)} className="rounded-xl" placeholder="Ninguno..." />
+
+                     <div className="space-y-3">
+                        <div className="space-y-1">
+                           <Label className="text-xs font-bold text-neutral-700">Resumen de Incidentes del día</Label>
+                           <Input value={currentLog?.safety.incidents || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, incidents: e.target.value}} : null)} className="rounded-xl h-10" placeholder="Ej: Sin accidentes. 1 aviso preventivo en piso 3..." />
+                        </div>
+                        <div className="space-y-1">
+                           <Label className="text-xs font-bold text-neutral-700">Observación General SSO</Label>
+                           <Input value={currentLog?.safety.observations || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, observations: e.target.value}} : null)} className="rounded-xl h-10" placeholder="Ej: Buen nivel de compromiso con uso de EPP..." />
+                        </div>
                      </div>
-                     <div className="space-y-2">
-                        <Label>Observación SSO</Label>
-                        <Input value={currentLog?.safety.observations || ''} disabled={!isEditing} onChange={e => setCurrentLog(l => l ? {...l, safety: {...l.safety, observations: e.target.value}} : null)} className="rounded-xl" placeholder="..." />
+
+                     <Separator />
+
+                     {/* Dynamic Safety Tickets Section */}
+                     <div className="space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                           <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-neutral-900 flex items-center gap-1.5">
+                                 <AlertCircle className="text-amber-600 h-4 w-4" />
+                                 Tickets y Registros SSO
+                              </h4>
+                              <Badge className="bg-amber-100 text-amber-900 border-none font-bold text-[10px]">
+                                 {currentLog?.safety.tickets?.length || 0} tickets
+                              </Badge>
+                           </div>
+                           {isEditing && (
+                              <Button 
+                                type="button"
+                                size="sm" 
+                                className="rounded-xl text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white h-8 gap-1 shadow-sm"
+                                onClick={addSafetyTicket}
+                              >
+                                 <Plus size={14} /> Añadir Ticket SSO
+                              </Button>
+                           )}
+                        </div>
+
+                        {(!currentLog?.safety.tickets || currentLog.safety.tickets.length === 0) ? (
+                           <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/60 text-center space-y-2">
+                              <p className="text-xs text-amber-900 font-medium">
+                                 No hay tickets SSO específicos ingresados.
+                              </p>
+                              {isEditing && (
+                                 <Button 
+                                   type="button" 
+                                   variant="outline" 
+                                   size="sm" 
+                                   className="rounded-xl border-amber-300 text-amber-900 bg-white hover:bg-amber-100 text-xs font-bold"
+                                   onClick={addSafetyTicket}
+                                 >
+                                    <Plus size={14} className="mr-1" /> Registrar Ticket / Hallazgo SSO
+                                 </Button>
+                              )}
+                           </div>
+                        ) : (
+                           <div className="space-y-4">
+                              {currentLog.safety.tickets.map((t, idx) => (
+                                 <Card key={t.id} className="rounded-2xl border-amber-200/80 shadow-sm bg-white overflow-hidden">
+                                    <CardContent className="p-4 space-y-3">
+                                       <div className="flex flex-wrap items-center justify-between gap-2 bg-amber-50/80 -mx-4 -mt-4 p-3 border-b border-amber-100">
+                                          <div className="flex items-center gap-2">
+                                             <Badge className="bg-amber-600 text-white font-mono text-[10px] font-bold">
+                                                Ticket #{t.number || idx + 1}
+                                             </Badge>
+                                             {t.createdAt && (
+                                                <span className="text-[10px] text-amber-900 font-medium">{t.createdAt}</span>
+                                             )}
+                                          </div>
+                                          <div className="flex items-center gap-2">
+                                             {isEditing ? (
+                                                <select 
+                                                  value={t.type || 'hallazgo'}
+                                                  onChange={e => updateSafetyTicket(t.id, 'type', e.target.value)}
+                                                  className="h-7 text-xs rounded-lg border border-amber-300 bg-white font-bold px-2 text-amber-950"
+                                                >
+                                                   <option value="hallazgo">Hallazgo</option>
+                                                   <option value="observacion">Observación</option>
+                                                   <option value="incidente">Incidente / Cuasi-Accidente</option>
+                                                   <option value="condicion_insegura">Condición Insegura</option>
+                                                   <option value="epp_faltante">EPP Faltante</option>
+                                                   <option value="felicitacion">Felicitación SSO</option>
+                                                </select>
+                                             ) : (
+                                                <Badge variant="outline" className="text-xs font-bold capitalize bg-white text-amber-900 border-amber-300">
+                                                   {t.type?.replace('_', ' ') || 'hallazgo'}
+                                                </Badge>
+                                             )}
+
+                                             {isEditing ? (
+                                                <select 
+                                                  value={t.severity || 'Media'}
+                                                  onChange={e => updateSafetyTicket(t.id, 'severity', e.target.value)}
+                                                  className="h-7 text-xs rounded-lg border border-neutral-300 bg-white font-bold px-2"
+                                                >
+                                                   <option value="Baja">Baja</option>
+                                                   <option value="Media">Media</option>
+                                                   <option value="Alta">Alta</option>
+                                                   <option value="Crítica">Crítica</option>
+                                                </select>
+                                             ) : (
+                                                <Badge className={cn(
+                                                   "text-[10px] font-bold border-none",
+                                                   t.severity === 'Crítica' ? "bg-rose-600 text-white" :
+                                                   t.severity === 'Alta' ? "bg-orange-500 text-white" :
+                                                   t.severity === 'Media' ? "bg-amber-500 text-white" :
+                                                   "bg-emerald-600 text-white"
+                                                )}>
+                                                   Sev: {t.severity || 'Media'}
+                                                </Badge>
+                                             )}
+
+                                             {isEditing && (
+                                                <Button 
+                                                  type="button"
+                                                  variant="ghost" 
+                                                  size="icon" 
+                                                  className="h-7 w-7 text-rose-500 hover:bg-rose-50 rounded-lg"
+                                                  onClick={() => removeSafetyTicket(t.id)}
+                                                >
+                                                   <Trash2 size={14} />
+                                                </Button>
+                                             )}
+                                          </div>
+                                       </div>
+
+                                       <div className="space-y-2">
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Asunto / Título del Ticket</Label>
+                                             <Input 
+                                               placeholder="Ej: Falta de línea de vida en andamio torre A"
+                                               value={t.title || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateSafetyTicket(t.id, 'title', e.target.value)}
+                                               className="h-9 rounded-xl font-semibold text-xs"
+                                             />
+                                          </div>
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Detalle / Observación</Label>
+                                             <Input 
+                                               placeholder="Descripción detallada de la situación observada..."
+                                               value={t.description || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateSafetyTicket(t.id, 'description', e.target.value)}
+                                               className="h-9 rounded-xl text-xs"
+                                             />
+                                          </div>
+                                       </div>
+
+                                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Estado del Ticket</Label>
+                                             {isEditing ? (
+                                                <select 
+                                                  value={t.status || 'Abierto'}
+                                                  onChange={e => updateSafetyTicket(t.id, 'status', e.target.value)}
+                                                  className="w-full h-9 rounded-xl text-xs border border-neutral-200 px-2 bg-white font-bold"
+                                                >
+                                                   <option value="Abierto">🔴 Abierto (Pendiente)</option>
+                                                   <option value="En Proceso">🟡 En Proceso de Solución</option>
+                                                   <option value="Corregido">🟢 Corregido en Terreno</option>
+                                                   <option value="Cerrado">⚪ Cerrado / Archivado</option>
+                                                </select>
+                                             ) : (
+                                                <Badge variant="outline" className={cn(
+                                                   "h-8 px-3 font-bold text-xs flex items-center justify-start border-none",
+                                                   t.status === 'Corregido' || t.status === 'Cerrado' ? "bg-emerald-100 text-emerald-800" :
+                                                   t.status === 'En Proceso' ? "bg-amber-100 text-amber-900" :
+                                                   "bg-rose-100 text-rose-900"
+                                                )}>
+                                                   {t.status || 'Abierto'}
+                                                </Badge>
+                                             )}
+                                          </div>
+
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Responsable / Trabajador / Empresa</Label>
+                                             <Input 
+                                               placeholder="Ej: Contratista Estructuras / Juan Pérez"
+                                               value={t.responsible || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateSafetyTicket(t.id, 'responsible', e.target.value)}
+                                               className="h-9 rounded-xl text-xs"
+                                             />
+                                          </div>
+                                       </div>
+
+                                       <div className="space-y-1">
+                                          <Label className="text-[11px] font-bold text-neutral-600">Acción Correctiva Exigida / Implementada</Label>
+                                          <Input 
+                                            placeholder="Ej: Se detuvo el trabajo y se instaló línea de vida..."
+                                            value={t.actionRequired || ''}
+                                            disabled={!isEditing}
+                                            onChange={e => updateSafetyTicket(t.id, 'actionRequired', e.target.value)}
+                                            className="h-9 rounded-xl text-xs"
+                                          />
+                                       </div>
+
+                                       {/* Evidence Image */}
+                                       <div className="pt-2 flex items-center justify-between border-t border-neutral-100">
+                                          <Label className="text-[11px] font-bold text-neutral-500">Foto de Evidencia SSO</Label>
+                                          {t.image ? (
+                                             <div className="relative h-12 w-12 rounded-xl overflow-hidden group/img border border-neutral-200">
+                                                <img src={t.image} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(t.image, '_blank')} alt="" />
+                                                {isEditing && (
+                                                   <Button type="button" size="icon" variant="destructive" className="absolute inset-0 w-full h-full opacity-0 group-hover/img:opacity-100 transition-opacity" onClick={() => updateSafetyTicket(t.id, 'image', undefined)}>
+                                                      <X size={14} />
+                                                   </Button>
+                                                )}
+                                             </div>
+                                          ) : (
+                                             isEditing && (
+                                                <div className="flex items-center gap-1">
+                                                   <div className="relative group/upload">
+                                                      <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                        onChange={(e) => {
+                                                           const file = e.target.files?.[0];
+                                                           if (file) handleSafetyTicketImage(t.id, file);
+                                                        }}
+                                                      />
+                                                      <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl text-xs text-neutral-600 bg-white border-neutral-200 gap-1">
+                                                         <Upload size={13} /> Subir
+                                                      </Button>
+                                                   </div>
+                                                   <Button 
+                                                     type="button"
+                                                     variant="outline" 
+                                                     size="sm" 
+                                                     className="h-8 rounded-xl text-xs text-neutral-600 bg-white border-neutral-200 gap-1"
+                                                     onClick={() => {
+                                                        setActiveSafetyTicketId(t.id);
+                                                        setCameraOpen(true);
+                                                     }}
+                                                   >
+                                                      <Camera size={13} /> Foto
+                                                   </Button>
+                                                </div>
+                                             )
+                                          )}
+                                       </div>
+                                    </CardContent>
+                                 </Card>
+                              ))}
+                           </div>
+                        )}
                      </div>
                   </div>
                </LogSection>

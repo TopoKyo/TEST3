@@ -115,6 +115,20 @@ export interface ActivityEntry {
   period: 'morning' | 'afternoon';
 }
 
+export interface SafetyTicket {
+  id: string;
+  number: number;
+  type: 'observacion' | 'hallazgo' | 'incidente' | 'condicion_insegura' | 'epp_faltante' | 'felicitacion';
+  title: string;
+  description: string;
+  severity: 'Baja' | 'Media' | 'Alta' | 'Crítica';
+  responsible?: string;
+  status: 'Abierto' | 'En Proceso' | 'Corregido' | 'Cerrado';
+  actionRequired?: string;
+  image?: string;
+  createdAt?: string;
+}
+
 export interface SafetyChecklist {
   morningTalk: boolean;
   eppUsage: boolean;
@@ -125,6 +139,7 @@ export interface SafetyChecklist {
   correctionsDone: boolean;
   observations: string;
   incidents: string;
+  tickets?: SafetyTicket[];
 }
 
 export interface ProblemEntry {
