@@ -84,6 +84,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     size: 'Estándar',
     condition: 'Nuevo (Entrega inicial)',
     userId: '',
+    customRecipientName: '',
     deliveredBy: '',
     observation: ''
   });
@@ -95,14 +96,15 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
   const [movementType, setMovementType] = useState<MovementType>('entry');
   
   // Form states
-  const [productForm, setProductForm] = useState<Partial<Product>>({
+  const [productForm, setProductForm] = useState<Partial<Product> & { initialStock?: number }>({
     id: '',
     name: '',
     unit: 'unidad',
     lowStockThreshold: 5,
     category: '',
     description: '',
-    isEpp: false
+    isEpp: false,
+    initialStock: 10
   });
   
   const [movementForm, setMovementForm] = useState({
@@ -110,6 +112,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
     quantity: 1,
     observation: '',
     userId: '',
+    customUserName: '',
     reason: ''
   });
 
@@ -201,10 +204,13 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productForm.id || !productForm.name) return;
+    if (!productForm.id || !productForm.name) {
+      toast.error('Completa los campos obligatorios del producto/EPP');
+      return;
+    }
 
     try {
-      const isEpp = productForm.isEpp || (productForm.category || '').toUpperCase().includes('EPP');
+      const isEpp = Boolean(productForm.isEpp || (productForm.category || '').toUpperCase().includes('EPP'));
       const payload: Product = {
         id: productForm.id,
         name: productForm.name,
@@ -213,7 +219,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         lowStockThreshold: productForm.lowStockThreshold ?? 5,
         location: productForm.location || '',
         description: productForm.description || '',
-        isEpp: Boolean(isEpp)
+        isEpp
       };
 
       if (editingProduct) {
@@ -221,38 +227,65 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         toast.success('Producto actualizado');
       } else {
         await firestoreService.add('products', payload);
-        toast.success('Producto creado');
+
+        // Add initial stock if specified (> 0)
+        const initQty = Number(productForm.initialStock) || 0;
+        if (initQty > 0) {
+          await firestoreService.add('inventoryMovements', {
+            id: Math.random().toString(36).substr(2, 9),
+            productId: payload.id,
+            productName: payload.name,
+            type: 'entry',
+            quantity: initQty,
+            userId: 'system',
+            userName: 'Ingreso Inicial de Stock',
+            timestamp: new Date().toISOString(),
+            observation: `Stock inicial asignado al registrar ${isEpp ? 'EPP' : 'Producto'}`
+          } as InventoryMovement);
+          toast.success(`${isEpp ? 'EPP' : 'Producto'} creado con ${initQty} unidades de stock inicial`);
+        } else {
+          toast.success(`${isEpp ? 'EPP' : 'Producto'} creado con éxito`);
+        }
       }
       setIsProductDialogOpen(false);
       setEditingProduct(null);
       fetchData();
     } catch (error) {
-      toast.error('Error al guardar producto');
+      console.error(error);
+      toast.error('Error al guardar el producto / EPP');
     }
   };
 
   const handleAddMovement = async () => {
     if (!movementForm.productId || movementForm.quantity <= 0) {
-      toast.error('Datos incompletos');
+      toast.error('Selecciona producto y cantidad válida');
       return;
     }
 
     const product = products.find(p => p.id === movementForm.productId);
     if (!product) return;
 
+    let targetUserId = movementForm.userId || 'anonymous';
+    let targetUserName = movementForm.customUserName?.trim() || 'Anónimo';
+
+    if (movementForm.userId) {
+      const u = users.find(usr => usr.id === movementForm.userId);
+      if (u) {
+        targetUserId = u.id;
+        targetUserName = u.name;
+      }
+    } else if (recognizedUser) {
+      targetUserId = recognizedUser.id;
+      targetUserName = recognizedUser.name;
+    }
+
     if (movementType === 'exit') {
       const currentStock = getStock(product.id);
       if (currentStock < movementForm.quantity) {
-        toast.error('Stock insuficiente');
-        return;
-      }
-      if (!recognizedUser && !movementForm.userId) {
-        toast.error('Se requiere identificar al usuario para la salida');
+        toast.error(`Stock insuficiente (${currentStock} disponible)`);
         return;
       }
     }
-
-    const user = recognizedUser || users.find(u => u.id === movementForm.userId);
 
     try {
       const newMovement: InventoryMovement = {
@@ -261,8 +294,8 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         productName: product.name,
         type: movementType,
         quantity: movementForm.quantity,
-        userId: user?.id || 'anonymous',
-        userName: user?.name || 'Anónimo',
+        userId: targetUserId,
+        userName: targetUserName,
         timestamp: new Date().toISOString(),
         observation: movementForm.observation,
         reason: movementForm.reason
@@ -270,12 +303,12 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       await firestoreService.add('inventoryMovements', newMovement);
 
-      toast.success('Movimiento registrado');
+      toast.success('Movimiento registrado correctamente');
       setIsMovementDialogOpen(false);
       setRecognizedUser(null);
       setIsScanning(false);
       fetchData();
-      setMovementForm({ ...movementForm, quantity: 1, observation: '', reason: '' });
+      setMovementForm({ ...movementForm, quantity: 1, observation: '', reason: '', userId: '', customUserName: '' });
     } catch (error) {
       toast.error('Error al registrar movimiento');
     }
@@ -292,9 +325,30 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
       return;
     }
 
-    const recipient = recognizedUser || users.find(u => u.id === eppDeliveryForm.userId);
-    if (!recipient) {
-      toast.error('Selecciona o escanea al trabajador que recibe el EPP');
+    // Determine recipient without forcing facial recognition
+    let recipientId = eppDeliveryForm.userId;
+    let recipientName = '';
+
+    if (eppDeliveryForm.userId) {
+      const foundUser = users.find(u => u.id === eppDeliveryForm.userId);
+      if (foundUser) {
+        recipientId = foundUser.id;
+        recipientName = foundUser.name;
+      }
+    }
+
+    if (!recipientName && eppDeliveryForm.customRecipientName.trim()) {
+      recipientName = eppDeliveryForm.customRecipientName.trim();
+      recipientId = `worker-${Math.random().toString(36).substr(2, 6)}`;
+    }
+
+    if (!recipientName && recognizedUser) {
+      recipientId = recognizedUser.id;
+      recipientName = recognizedUser.name;
+    }
+
+    if (!recipientName) {
+      toast.error('Por favor selecciona o ingresa el nombre del trabajador que recibe el EPP');
       return;
     }
 
@@ -316,8 +370,8 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         productId: product.id,
         productName: product.name,
         quantity: eppDeliveryForm.quantity,
-        recipientId: recipient.id,
-        recipientName: recipient.name,
+        recipientId,
+        recipientName,
         deliveredByName: eppDeliveryForm.deliveredBy || 'Bodega / Supervisor',
         timestamp,
         size: eppDeliveryForm.size || 'Estándar',
@@ -334,8 +388,8 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         productName: product.name,
         type: 'exit',
         quantity: eppDeliveryForm.quantity,
-        userId: recipient.id,
-        userName: recipient.name,
+        userId: recipientId,
+        userName: recipientName,
         timestamp,
         reason: `Entrega EPP (${eppDeliveryForm.condition}) - Talla: ${eppDeliveryForm.size || 'Estándar'}`,
         observation: eppDeliveryForm.observation,
@@ -346,7 +400,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
       await firestoreService.add('inventoryMovements', movementRecord);
 
-      toast.success(`EPP (${product.name}) entregado exitosamente a ${recipient.name}`);
+      toast.success(`EPP (${product.name}) entregado exitosamente a ${recipientName}`);
       setIsEPPDeliveryDialogOpen(false);
       setRecognizedUser(null);
       setIsScanning(false);
@@ -356,6 +410,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         size: 'Estándar',
         condition: 'Nuevo (Entrega inicial)',
         userId: '',
+        customRecipientName: '',
         deliveredBy: '',
         observation: ''
       });
@@ -1574,73 +1629,104 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
               </div>
             </div>
 
-            {/* WORKER IDENTIFICATION SIDE */}
+            {/* WORKER SELECTION SIDE */}
             <div className="space-y-4 flex flex-col justify-between">
-              <Label className="font-bold flex items-center gap-2 text-neutral-900">
-                <UserCheck size={18} className="text-amber-600" />
-                Trabajador que Recibe el EPP
-              </Label>
+              <div className="space-y-3 bg-amber-50/70 p-4 rounded-2xl border border-amber-200/80">
+                <Label className="font-bold flex items-center gap-2 text-amber-950 text-base">
+                  <UserCheck size={20} className="text-amber-600" />
+                  Trabajador que Recibe el EPP
+                </Label>
+                <p className="text-xs text-amber-900/80">
+                  Selecciona la persona del listado o ingresa su nombre directamente.
+                </p>
 
-              <div className="flex-1 bg-neutral-900 rounded-3xl overflow-hidden relative border-4 border-amber-100 shadow-inner min-h-[220px] flex flex-col justify-center items-center">
-                {isScanning ? (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    muted
-                    playsInline
-                    className="w-full h-full object-cover"
+                <div className="space-y-1.5 pt-1">
+                  <Label className="text-xs font-semibold text-neutral-700">Seleccionar de Lista de Personal</Label>
+                  <Select 
+                    value={eppDeliveryForm.userId} 
+                    onValueChange={v => {
+                      setEppDeliveryForm({ ...eppDeliveryForm, userId: v, customRecipientName: '' });
+                      setRecognizedUser(null);
+                    }}
+                  >
+                    <SelectTrigger className="rounded-xl h-11 border-amber-200 bg-white shadow-sm font-medium">
+                      <SelectValue placeholder="-- Elegir Trabajador --" />
+                    </SelectTrigger>
+                    <SelectContent className="rounded-xl max-h-60">
+                      {users.map(u => (
+                        <SelectItem key={u.id} value={u.id}>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold">{u.name}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2 my-1">
+                  <div className="h-[1px] bg-amber-200 flex-1"></div>
+                  <span className="text-[10px] font-bold text-amber-700 uppercase">o escribe nombre</span>
+                  <div className="h-[1px] bg-amber-200 flex-1"></div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold text-neutral-700">Nombre del Trabajador (Si no está en la lista)</Label>
+                  <Input 
+                    value={eppDeliveryForm.customRecipientName}
+                    onChange={e => setEppDeliveryForm({ ...eppDeliveryForm, customRecipientName: e.target.value, userId: '' })}
+                    placeholder="Ej: Pedro González"
+                    className="rounded-xl h-10 border-amber-200 bg-white"
                   />
-                ) : recognizedUser ? (
-                  <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-amber-500/10 text-center">
-                    {recognizedUser.image ? (
-                      <img src={recognizedUser.image} alt="" className="w-20 h-20 rounded-2xl object-cover ring-4 ring-white shadow-xl mb-3" />
-                    ) : (
-                      <div className="w-20 h-20 rounded-2xl bg-amber-500 text-white flex items-center justify-center text-3xl font-bold mb-3">
-                        {recognizedUser.name.charAt(0)}
-                      </div>
-                    )}
-                    <h4 className="text-base font-bold text-amber-950">{recognizedUser.name}</h4>
-                    <Badge className="mt-1 bg-emerald-100 text-emerald-800 border-none font-bold">Rostro Verificado</Badge>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="mt-3 text-xs h-7 rounded-lg text-neutral-600"
-                      onClick={() => {
-                        setRecognizedUser(null);
-                        setIsScanning(true);
-                      }}
-                    >
-                      Re-intentar escaneo
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-neutral-400 p-6 text-center">
-                    <Camera size={40} className="opacity-30" />
-                    <p className="text-xs">Escanear rostro para validar identidad</p>
-                    <Button 
-                      variant="secondary" 
-                      className="rounded-xl h-9 w-full text-xs font-bold bg-neutral-800 text-white hover:bg-neutral-700"
-                      onClick={() => setIsScanning(true)}
-                    >
-                      Escanear Rostro
-                    </Button>
-                    <div className="flex items-center gap-2 w-full my-1">
-                      <div className="h-[1px] bg-neutral-800 flex-1"></div>
-                      <span className="text-[10px] font-bold text-neutral-500 uppercase">o selecciona manual</span>
-                      <div className="h-[1px] bg-neutral-800 flex-1"></div>
+                </div>
+
+                {/* WORKER SELECTED CONFIRMATION CARD */}
+                {(eppDeliveryForm.userId || eppDeliveryForm.customRecipientName || recognizedUser) && (
+                  <div className="mt-3 p-3 bg-white rounded-xl border border-emerald-300 shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-sm">
+                      {(eppDeliveryForm.customRecipientName || users.find(u => u.id === eppDeliveryForm.userId)?.name || recognizedUser?.name || '?').charAt(0)}
                     </div>
-                    <Select value={eppDeliveryForm.userId} onValueChange={v => setEppDeliveryForm({ ...eppDeliveryForm, userId: v })}>
-                      <SelectTrigger className="rounded-xl h-10 bg-neutral-800 border-neutral-700 text-neutral-200 text-xs">
-                        <SelectValue placeholder="Seleccionar trabajador..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {users.map(u => (
-                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-emerald-950 truncate">
+                        {eppDeliveryForm.customRecipientName || users.find(u => u.id === eppDeliveryForm.userId)?.name || recognizedUser?.name}
+                      </p>
+                      <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-bold border-none px-2 py-0">
+                        Persona Asignada
+                      </Badge>
+                    </div>
+                    <CheckCircle2 className="text-emerald-600 h-5 w-5 shrink-0" />
                   </div>
                 )}
+
+                {/* OPTIONAL CAMERA SCANNER BUTTON */}
+                <div className="pt-2 border-t border-amber-200/60">
+                  {!isScanning ? (
+                    <Button 
+                      type="button"
+                      variant="outline" 
+                      size="sm"
+                      className="w-full rounded-xl text-xs font-semibold border-amber-300 text-amber-900 bg-white/80 hover:bg-amber-100/50 gap-1.5"
+                      onClick={() => setIsScanning(true)}
+                    >
+                      <Camera size={14} /> Usar Cámara Facial (Opcional)
+                    </Button>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="w-full h-36 bg-black rounded-xl overflow-hidden relative">
+                        <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                      </div>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="w-full text-xs text-rose-600 h-7"
+                        onClick={() => setIsScanning(false)}
+                      >
+                        Cerrar Cámara
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1867,25 +1953,31 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
         <DialogContent className="rounded-3xl p-8 max-w-lg">
           <DialogHeader className="mb-6 px-0 text-left">
             <DialogTitle className="text-2xl font-bold tracking-tight">
-              {editingProduct ? 'Editar Producto / EPP' : 'Nuevo Producto / EPP'}
+              {editingProduct 
+                ? 'Editar Producto / EPP' 
+                : productForm.isEpp 
+                  ? 'Nuevo Elemento de EPP (Con Stock Inicial)' 
+                  : 'Nuevo Producto / EPP'}
             </DialogTitle>
-            <DialogDescription>Completa la información del ítem para el inventario de la obra.</DialogDescription>
+            <DialogDescription>
+              Completa la información del ítem para ingresar EPP o productos al inventario de la obra.
+            </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSaveProduct} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>ID del Código</Label>
+                <Label className="font-bold text-xs">ID de Código</Label>
                 <Input 
                   disabled={!!editingProduct}
                   value={productForm.id || ''} 
                   onChange={e => setProductForm({...productForm, id: e.target.value.toUpperCase()})}
-                  className="rounded-xl h-11 border-neutral-200 font-mono"
+                  className="rounded-xl h-11 border-neutral-200 font-mono font-bold"
                   placeholder="PROD-001 o EPP-001"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label>Categoría</Label>
+                <Label className="font-bold text-xs">Categoría</Label>
                 <Input 
                   value={productForm.category || ''} 
                   onChange={e => setProductForm({...productForm, category: e.target.value})}
@@ -1896,19 +1988,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
             </div>
 
             <div className="space-y-2">
-              <Label>Nombre del Producto / EPP</Label>
+              <Label className="font-bold text-xs">Nombre del Elemento / EPP</Label>
               <Input 
                 value={productForm.name || ''} 
                 onChange={e => setProductForm({...productForm, name: e.target.value})}
-                className="rounded-xl h-11 border-neutral-200 font-medium"
-                placeholder="Ej: Casco Dieléctrico / Tornillos 2 pulgadas"
+                className="rounded-xl h-11 border-neutral-200 font-bold"
+                placeholder="Ej: Casco Dieléctrico / Guantes de Cabritilla"
                 required
               />
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Ubicación en Bodega</Label>
+                <Label className="font-bold text-xs">Ubicación en Bodega</Label>
                 <Input 
                   value={productForm.location || ''} 
                   onChange={e => setProductForm({...productForm, location: e.target.value})}
@@ -1917,9 +2009,9 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                 />
               </div>
               <div className="space-y-2">
-                <Label>Unidad de Medida</Label>
+                <Label className="font-bold text-xs">Unidad de Medida</Label>
                 <Select value={productForm.unit || 'unidad'} onValueChange={v => setProductForm({...productForm, unit: v})}>
-                  <SelectTrigger className="rounded-xl h-11 border-neutral-200">
+                  <SelectTrigger className="rounded-xl h-11 border-neutral-200 font-medium">
                     <SelectValue placeholder="Seleccionar" />
                   </SelectTrigger>
                   <SelectContent className="rounded-xl">
@@ -1934,20 +2026,40 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
               </div>
             </div>
 
+            {!editingProduct && (
+              <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 space-y-2">
+                <Label className="font-bold text-emerald-950 flex items-center justify-between">
+                  <span>Stock Inicial a Ingresar ({productForm.unit || 'unidades'})</span>
+                  <Badge className="bg-emerald-600 text-white text-[10px] font-bold">Ingreso Directo</Badge>
+                </Label>
+                <p className="text-xs text-emerald-800">
+                  Ingresa la cantidad física disponible actual de este EPP/producto.
+                </p>
+                <Input 
+                  type="number"
+                  min={0}
+                  value={productForm.initialStock ?? 0}
+                  onChange={e => setProductForm({...productForm, initialStock: Number(e.target.value)})}
+                  className="rounded-xl h-12 border-emerald-300 bg-white font-black text-lg text-emerald-950"
+                  placeholder="Ej: 10, 25, 50..."
+                />
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Alerta Stock Mínimo</Label>
+                <Label className="font-bold text-xs">Alerta Stock Mínimo</Label>
                 <Input 
                   type="number"
                   value={productForm.lowStockThreshold ?? 5} 
                   onChange={e => setProductForm({...productForm, lowStockThreshold: Number(e.target.value)})}
-                  className="rounded-xl h-11 border-neutral-200"
+                  className="rounded-xl h-11 border-neutral-200 font-semibold"
                   min={1}
                   required
                 />
               </div>
               <div className="space-y-2 flex flex-col justify-end pb-1">
-                <label className="flex items-center gap-2 cursor-pointer p-2 bg-amber-50 rounded-xl border border-amber-200 text-xs font-bold text-amber-900">
+                <label className="flex items-center gap-2 cursor-pointer p-2.5 bg-amber-50/80 hover:bg-amber-100/80 rounded-xl border border-amber-200 text-xs font-bold text-amber-900 transition-all">
                   <input 
                     type="checkbox"
                     checked={Boolean(productForm.isEpp || productForm.category?.toUpperCase().includes('EPP'))}
@@ -1960,7 +2072,7 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
             </div>
 
             <div className="space-y-2">
-              <Label>Descripción / Especificación Taller</Label>
+              <Label className="font-bold text-xs">Descripción / Especificación Taller</Label>
               <Input 
                 value={productForm.description || ''} 
                 onChange={e => setProductForm({...productForm, description: e.target.value})}
@@ -2059,64 +2171,68 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
 
             <div className="space-y-4">
               {movementType === 'exit' && (
-                <div className="flex flex-col h-full gap-4">
-                  <Label className="flex items-center gap-2">
-                    <UserCheck size={16} className="text-primary" />
-                    Identificación del Solicitante
+                <div className="flex flex-col h-full gap-3 bg-neutral-50 p-4 rounded-2xl border border-neutral-200">
+                  <Label className="flex items-center gap-2 font-bold text-neutral-900">
+                    <UserCheck size={18} className="text-primary" />
+                    Solicitante / Persona que retira
                   </Label>
                   
-                  <div className="flex-1 bg-neutral-900 rounded-3xl overflow-hidden relative border-4 border-neutral-50 shadow-inner min-h-[240px]">
-                    {isScanning ? (
-                      <video
-                        ref={videoRef}
-                        autoPlay
-                        muted
-                        playsInline
-                        className="w-full h-full object-cover grayscale-[0.3]"
-                      />
-                    ) : recognizedUser ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-primary/10">
-                         {recognizedUser.image && <img src={recognizedUser.image} alt="" className="w-24 h-24 rounded-2xl object-cover ring-4 ring-white shadow-xl mb-4" />}
-                         <h4 className="text-lg font-bold text-primary">{recognizedUser.name}</h4>
-                         <Badge variant="outline" className="mt-2 bg-white/50 border-primary/20 text-primary font-bold">Identidad Verificada</Badge>
-                         <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="mt-4 text-xs h-8 rounded-lg"
-                            onClick={() => {
-                              setRecognizedUser(null);
-                              setIsScanning(true);
-                            }}
-                          >
-                           Re-intentar escaneo
-                         </Button>
-                      </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs font-semibold text-neutral-700">Seleccionar de Lista de Personal</Label>
+                    <Select value={movementForm.userId} onValueChange={v => setMovementForm({...movementForm, userId: v, customUserName: ''})}>
+                      <SelectTrigger className="rounded-xl h-11 bg-white border-neutral-200 shadow-sm font-medium">
+                        <SelectValue placeholder="-- Seleccionar persona --" />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl max-h-60">
+                        {users.map(u => (
+                          <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2 my-1">
+                    <div className="h-[1px] bg-neutral-200 flex-1"></div>
+                    <span className="text-[10px] font-bold text-neutral-400 uppercase">o escribe nombre</span>
+                    <div className="h-[1px] bg-neutral-200 flex-1"></div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold text-neutral-700">Nombre de la Persona (Si no está en la lista)</Label>
+                    <Input 
+                      value={movementForm.customUserName || ''}
+                      onChange={e => setMovementForm({ ...movementForm, customUserName: e.target.value, userId: '' })}
+                      placeholder="Ej: Manuel Silva"
+                      className="rounded-xl h-10 border-neutral-200 bg-white"
+                    />
+                  </div>
+
+                  {/* OPTIONAL CAMERA SCANNER */}
+                  <div className="pt-2 border-t border-neutral-200">
+                    {!isScanning ? (
+                      <Button 
+                        type="button"
+                        variant="outline" 
+                        size="sm"
+                        className="w-full rounded-xl text-xs font-semibold border-neutral-300 text-neutral-700 bg-white gap-1.5"
+                        onClick={() => setIsScanning(true)}
+                      >
+                        <Camera size={14} /> Escanear Rostro (Opcional)
+                      </Button>
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-4 text-neutral-400 p-8 text-center">
-                        <Camera size={48} className="opacity-20 translate-y-2" />
-                        <p className="text-sm">Inicia la cámara para el reconocimiento facial</p>
-                        <Button 
-                          variant="secondary" 
-                          className="rounded-2xl h-10 w-full"
-                          onClick={() => setIsScanning(true)}
-                        >
-                          Escanear Rostro
-                        </Button>
-                        <div className="flex items-center gap-2 w-full">
-                          <div className="h-[1px] bg-neutral-800 flex-1"></div>
-                          <span className="text-[10px] font-bold text-neutral-600 uppercase">o selecciona manual</span>
-                          <div className="h-[1px] bg-neutral-800 flex-1"></div>
+                      <div className="space-y-2">
+                        <div className="w-full h-32 bg-black rounded-xl overflow-hidden relative">
+                          <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
                         </div>
-                        <Select value={movementForm.userId} onValueChange={v => setMovementForm({...movementForm, userId: v})}>
-                          <SelectTrigger className="rounded-xl h-10 bg-neutral-800 border-neutral-700 text-neutral-200">
-                            <SelectValue placeholder="Seleccionar usuario..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {users.map(u => (
-                              <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="w-full text-xs text-rose-600 h-7"
+                          onClick={() => setIsScanning(false)}
+                        >
+                          Cerrar Cámara
+                        </Button>
                       </div>
                     )}
                   </div>
