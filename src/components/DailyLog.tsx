@@ -36,7 +36,9 @@ import {
   RefreshCw,
   Check,
   ChevronsUpDown,
-  Briefcase
+  Briefcase,
+  ShieldCheck,
+  UserCheck
 } from 'lucide-react';
 import { 
   Dialog,
@@ -67,6 +69,8 @@ import {
   PlanEntry, 
   SafetyChecklist,
   SafetyTicket,
+  EppInspection,
+  EppAuditedPerson,
   AttendanceLog
 } from '@/src/types';
 import { compressImage } from '../lib/imageUtils';
@@ -184,7 +188,8 @@ const EMPTY_LOG: Omit<WorkLog, 'id' | 'date'> = {
     correctionsDone: false,
     observations: '',
     incidents: '',
-    tickets: []
+    tickets: [],
+    eppInspections: []
   },
   problems: [],
   nextDayPlan: []
@@ -200,6 +205,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   const [activeActivityId, setActiveActivityId] = useState<string | null>(null);
   const [activeProblemId, setActiveProblemId] = useState<string | null>(null);
   const [activeSafetyTicketId, setActiveSafetyTicketId] = useState<string | null>(null);
+  const [activeEppInspectionId, setActiveEppInspectionId] = useState<string | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [viewMode, setViewMode] = useState<'daily' | 'history'>('daily');
@@ -264,7 +270,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
   };
 
   const capturePhoto = async () => {
-    if (videoRef.current && (activeActivityId || activeProblemId || activeSafetyTicketId)) {
+    if (videoRef.current && (activeActivityId || activeProblemId || activeSafetyTicketId || activeEppInspectionId)) {
       const canvas = document.createElement('canvas');
       canvas.width = videoRef.current.videoWidth;
       canvas.height = videoRef.current.videoHeight;
@@ -277,16 +283,19 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         if (activeActivityId) updateItem('activities', activeActivityId, 'image', compressed);
         else if (activeProblemId) updateItem('problems', activeProblemId, 'image', compressed);
         else if (activeSafetyTicketId) updateSafetyTicket(activeSafetyTicketId, 'image', compressed);
+        else if (activeEppInspectionId) updateEppInspection(activeEppInspectionId, 'image', compressed);
       } catch (e) {
         if (activeActivityId) updateItem('activities', activeActivityId, 'image', dataUrl);
         else if (activeProblemId) updateItem('problems', activeProblemId, 'image', dataUrl);
         else if (activeSafetyTicketId) updateSafetyTicket(activeSafetyTicketId, 'image', dataUrl);
+        else if (activeEppInspectionId) updateEppInspection(activeEppInspectionId, 'image', dataUrl);
       }
       
       setCameraOpen(false);
       setActiveActivityId(null);
       setActiveProblemId(null);
       setActiveSafetyTicketId(null);
+      setActiveEppInspectionId(null);
     }
   };
 
@@ -349,6 +358,144 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         updateSafetyTicket(id, 'image', compressed);
       } catch (e) {
         updateSafetyTicket(id, 'image', base64);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // EPP Inspection / Fiscalización Helper Functions
+  const addEppInspection = () => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const newInspection: EppInspection = {
+      id: Math.random().toString(36).substr(2, 6),
+      number: currentInspections.length + 1,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      sector: 'Piso 1 / Área General',
+      inspector: 'Prevencionista SSO',
+      auditedPeople: [
+        {
+          id: Math.random().toString(36).substr(2, 5),
+          name: '',
+          company: '',
+          status: 'cumple',
+          details: 'Uso correcto de casco, chaleco, calzado y gafas'
+        }
+      ],
+      summaryNote: '',
+      createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: [...currentInspections, newInspection]
+      }
+    });
+  };
+
+  const updateEppInspection = (id: string, field: string, value: any) => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const updated = currentInspections.map(insp => insp.id === id ? { ...insp, [field]: value } : insp);
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: updated
+      }
+    });
+  };
+
+  const removeEppInspection = (id: string) => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const filtered = currentInspections.filter(insp => insp.id !== id);
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: filtered
+      }
+    });
+  };
+
+  const addPersonToEppInspection = (inspectionId: string) => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const updated = currentInspections.map(insp => {
+      if (insp.id === inspectionId) {
+        return {
+          ...insp,
+          auditedPeople: [
+            ...insp.auditedPeople,
+            {
+              id: Math.random().toString(36).substr(2, 5),
+              name: '',
+              company: '',
+              status: 'cumple' as const,
+              details: ''
+            }
+          ]
+        };
+      }
+      return insp;
+    });
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: updated
+      }
+    });
+  };
+
+  const updateAuditedPerson = (inspectionId: string, personId: string, field: string, value: any) => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const updated = currentInspections.map(insp => {
+      if (insp.id === inspectionId) {
+        const updatedPeople = insp.auditedPeople.map(p => p.id === personId ? { ...p, [field]: value } : p);
+        return { ...insp, auditedPeople: updatedPeople };
+      }
+      return insp;
+    });
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: updated
+      }
+    });
+  };
+
+  const removeAuditedPerson = (inspectionId: string, personId: string) => {
+    if (!currentLog) return;
+    const currentInspections = currentLog.safety?.eppInspections || [];
+    const updated = currentInspections.map(insp => {
+      if (insp.id === inspectionId) {
+        return { ...insp, auditedPeople: insp.auditedPeople.filter(p => p.id !== personId) };
+      }
+      return insp;
+    });
+    setCurrentLog({
+      ...currentLog,
+      safety: {
+        ...currentLog.safety,
+        eppInspections: updated
+      }
+    });
+  };
+
+  const handleEppInspectionImage = (id: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64 = reader.result as string;
+      try {
+        const compressed = await compressImage(base64, 800, 0.6);
+        updateEppInspection(id, 'image', compressed);
+      } catch (e) {
+        updateEppInspection(id, 'image', base64);
       }
     };
     reader.readAsDataURL(file);
@@ -780,6 +927,65 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         theme: 'grid',
         styles: { fontSize: 8, cellPadding: 2 },
         headStyles: { fillColor: [217, 119, 6], textColor: [255, 255, 255], fontStyle: 'bold' }
+      });
+    }
+
+    if (currentLog.safety.eppInspections && currentLog.safety.eppInspections.length > 0) {
+      const inspectionBody = currentLog.safety.eppInspections.map(insp => {
+        const peopleListStr = (insp.auditedPeople || []).map(p => {
+          const statusText = p.status === 'cumple' ? '🟢 CUMPLE EPP' : p.status === 'no_cumple' ? '🔴 NO CUMPLE' : '🟡 PARCIAL';
+          const detailsStr = p.details ? ` (${p.details})` : '';
+          return `• ${p.name || 'Trabajador'}${p.company ? ' [' + p.company + ']' : ''}: ${statusText}${detailsStr}`;
+        }).join('\n');
+
+        const headerStr = `#${insp.number}\nHora: ${insp.time || '-'}\nLugar: ${insp.sector || '-'}\nInsp: ${insp.inspector || '-'}`;
+        const obsStr = insp.summaryNote || '-';
+
+        return [headerStr, peopleListStr || 'Sin personas registradas', obsStr, ''];
+      });
+
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 5,
+        head: [
+          [{ content: 'FISCALIZACIÓN DE USO DE EPP EN TERRENO', colSpan: 4, styles: { halign: 'center', fillColor: [16, 185, 129] } }],
+          ['FISCALIZACIÓN', 'PERSONAS FISCALIZADAS Y ESTADO DE EPP', 'OBSERVACIONES', 'FOTO EVIDENCIA']
+        ],
+        body: inspectionBody,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [16, 185, 129], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: {
+          0: { cellWidth: 35 },
+          1: { cellWidth: 75 },
+          2: { cellWidth: 45 },
+          3: { cellWidth: 35 }
+        },
+        didParseCell: (data) => {
+          if (data.section === 'body' && currentLog.safety.eppInspections && data.row.index < currentLog.safety.eppInspections.length) {
+            const insp = currentLog.safety.eppInspections[data.row.index];
+            if (insp && insp.image) {
+              data.row.height = 25; 
+            }
+          }
+        },
+        didDrawCell: (data) => {
+          if (data.section === 'body' && data.column.index === 3) {
+            if (currentLog.safety.eppInspections && data.row.index < currentLog.safety.eppInspections.length) {
+              const insp = currentLog.safety.eppInspections[data.row.index];
+              if (insp && insp.image) {
+                try {
+                  const x = data.cell.x + 2;
+                  const y = data.cell.y + 2;
+                  const w = data.cell.width - 4;
+                  const h = data.cell.height - 4;
+                  doc.addImage(insp.image, 'JPEG', x, y, w, h);
+                } catch (e) {
+                  console.error('Error drawing image in PDF table for EPP inspection', e);
+                }
+              }
+            }
+          }
+        }
       });
     }
 
@@ -1820,6 +2026,309 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                                      }}
                                                    >
                                                       <Camera size={13} /> Foto
+                                                   </Button>
+                                                </div>
+                                             )
+                                          )}
+                                       </div>
+                                    </CardContent>
+                                 </Card>
+                              ))}
+                           </div>
+                        )}
+                     </div>
+
+                     <Separator />
+
+                     {/* Dynamic EPP Inspection / Fiscalización Section */}
+                     <div className="space-y-4">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                           <div className="flex items-center gap-2">
+                              <h4 className="text-sm font-bold text-neutral-900 flex items-center gap-1.5">
+                                 <ShieldCheck className="text-emerald-600 h-4 w-4" />
+                                 Fiscalización de Uso de EPP en Terreno
+                              </h4>
+                              <Badge className="bg-emerald-100 text-emerald-900 border-none font-bold text-[10px]">
+                                 {currentLog?.safety.eppInspections?.length || 0} fiscalizaciones
+                              </Badge>
+                           </div>
+                           {isEditing && (
+                              <Button 
+                                type="button"
+                                size="sm" 
+                                className="rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white h-8 gap-1 shadow-sm"
+                                onClick={addEppInspection}
+                              >
+                                 <Plus size={14} /> Nueva Fiscalización EPP
+                              </Button>
+                           )}
+                        </div>
+
+                        {(!currentLog?.safety.eppInspections || currentLog.safety.eppInspections.length === 0) ? (
+                           <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200/60 text-center space-y-2">
+                              <p className="text-xs text-emerald-950 font-medium">
+                                 No hay fiscalizaciones de EPP registradas para este día.
+                              </p>
+                              {isEditing && (
+                                 <Button 
+                                   type="button" 
+                                   variant="outline" 
+                                   size="sm" 
+                                   className="rounded-xl border-emerald-300 text-emerald-900 bg-white hover:bg-emerald-100 text-xs font-bold"
+                                   onClick={addEppInspection}
+                                 >
+                                    <Plus size={14} className="mr-1" /> Registrar Fiscalización de EPP en Terreno
+                                 </Button>
+                              )}
+                           </div>
+                        ) : (
+                           <div className="space-y-4">
+                              {currentLog.safety.eppInspections.map((insp, idx) => (
+                                 <Card key={insp.id} className="rounded-2xl border-emerald-200/80 shadow-sm bg-white overflow-hidden">
+                                    <CardContent className="p-4 space-y-4">
+                                       {/* Header of Inspection Card */}
+                                       <div className="flex flex-wrap items-center justify-between gap-2 bg-emerald-50/80 -mx-4 -mt-4 p-3 border-b border-emerald-100">
+                                          <div className="flex items-center gap-2">
+                                             <Badge className="bg-emerald-700 text-white font-mono text-[10px] font-bold">
+                                                Fiscalización #{insp.number || idx + 1}
+                                             </Badge>
+                                             {insp.createdAt && (
+                                                <span className="text-[10px] text-emerald-900 font-medium">{insp.createdAt}</span>
+                                             )}
+                                          </div>
+                                          {isEditing && (
+                                             <Button 
+                                               type="button"
+                                               variant="ghost" 
+                                               size="icon" 
+                                               className="h-7 w-7 text-rose-500 hover:bg-rose-50 rounded-lg"
+                                               onClick={() => removeEppInspection(insp.id)}
+                                               title="Eliminar Fiscalización"
+                                             >
+                                                <Trash2 size={14} />
+                                             </Button>
+                                          )}
+                                       </div>
+
+                                       {/* Basic Info: Hora, Sector/Lugar, Fiscalizador/Inspector */}
+                                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Hora</Label>
+                                             <Input 
+                                               placeholder="Ej: 10:30"
+                                               value={insp.time || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateEppInspection(insp.id, 'time', e.target.value)}
+                                               className="h-8 rounded-xl text-xs font-semibold"
+                                             />
+                                          </div>
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Sector / Área de Obra</Label>
+                                             <Input 
+                                               placeholder="Ej: Torre A - Piso 4"
+                                               value={insp.sector || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateEppInspection(insp.id, 'sector', e.target.value)}
+                                               className="h-8 rounded-xl text-xs"
+                                             />
+                                          </div>
+                                          <div className="space-y-1">
+                                             <Label className="text-[11px] font-bold text-neutral-600">Fiscalizador SSO / Inspector</Label>
+                                             <Input 
+                                               placeholder="Ej: Prevencionista de Riesgos"
+                                               value={insp.inspector || ''}
+                                               disabled={!isEditing}
+                                               onChange={e => updateEppInspection(insp.id, 'inspector', e.target.value)}
+                                               className="h-8 rounded-xl text-xs"
+                                             />
+                                          </div>
+                                       </div>
+
+                                       {/* AUDITED PEOPLE TABLE / LIST */}
+                                       <div className="space-y-2 pt-2 border-t border-neutral-100">
+                                          <div className="flex items-center justify-between">
+                                             <Label className="text-xs font-bold text-neutral-800 flex items-center gap-1">
+                                                <UserCheck size={14} className="text-emerald-600" />
+                                                Personas Fiscalizadas ({insp.auditedPeople.length})
+                                             </Label>
+                                             {isEditing && (
+                                                <Button 
+                                                  type="button" 
+                                                  variant="ghost" 
+                                                  size="sm" 
+                                                  className="h-7 text-xs font-bold text-emerald-800 hover:bg-emerald-50 rounded-lg gap-1"
+                                                  onClick={() => addPersonToEppInspection(insp.id)}
+                                                >
+                                                   <Plus size={13} /> Añadir Persona
+                                                </Button>
+                                             )}
+                                          </div>
+
+                                          <div className="space-y-2">
+                                             {insp.auditedPeople.map((p, pIdx) => (
+                                                <div key={p.id || pIdx} className="p-3 bg-neutral-50/80 rounded-xl border border-neutral-200/80 space-y-2">
+                                                   <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                                      {/* Name / Worker selection */}
+                                                      <div className="sm:col-span-5 space-y-1">
+                                                         <Label className="text-[10px] text-neutral-500 font-bold">Trabajador Fiscalizado</Label>
+                                                         {isEditing ? (
+                                                            <div className="space-y-1">
+                                                               <select 
+                                                                 className="w-full h-8 rounded-lg text-xs border border-neutral-200 bg-white font-medium px-2"
+                                                                 value={p.name}
+                                                                 onChange={e => {
+                                                                    const val = e.target.value;
+                                                                    updateAuditedPerson(insp.id, p.id, 'name', val);
+                                                                 }}
+                                                               >
+                                                                  <option value="">-- Seleccionar trabajador --</option>
+                                                                  {users.map(u => (
+                                                                     <option key={u.id} value={u.name}>{u.name}</option>
+                                                                  ))}
+                                                               </select>
+                                                               {!users.some(u => u.name === p.name) && (
+                                                                  <Input 
+                                                                    placeholder="Escribir nombre si no está en lista..."
+                                                                    value={p.name}
+                                                                    onChange={e => updateAuditedPerson(insp.id, p.id, 'name', e.target.value)}
+                                                                    className="h-7 rounded-lg text-xs bg-white"
+                                                                  />
+                                                               )}
+                                                            </div>
+                                                         ) : (
+                                                            <p className="text-xs font-bold text-neutral-900">{p.name || 'Sin nombre'}</p>
+                                                         )}
+                                                      </div>
+
+                                                      {/* Empresa / Contratista */}
+                                                      <div className="sm:col-span-3 space-y-1">
+                                                         <Label className="text-[10px] text-neutral-500 font-bold">Empresa / Contratista</Label>
+                                                         <Input 
+                                                           placeholder="Ej: Subcontrato"
+                                                           value={p.company || ''}
+                                                           disabled={!isEditing}
+                                                           onChange={e => updateAuditedPerson(insp.id, p.id, 'company', e.target.value)}
+                                                           className="h-8 rounded-lg text-xs bg-white"
+                                                         />
+                                                      </div>
+
+                                                      {/* EPP Compliance Status */}
+                                                      <div className="sm:col-span-3 space-y-1">
+                                                         <Label className="text-[10px] text-neutral-500 font-bold">¿Usa EPP?</Label>
+                                                         {isEditing ? (
+                                                            <select 
+                                                              value={p.status || 'cumple'}
+                                                              onChange={e => updateAuditedPerson(insp.id, p.id, 'status', e.target.value)}
+                                                              className={cn(
+                                                                 "w-full h-8 rounded-lg text-xs border font-bold px-2",
+                                                                 p.status === 'cumple' ? "border-emerald-300 bg-emerald-50 text-emerald-900" :
+                                                                 p.status === 'no_cumple' ? "border-rose-300 bg-rose-50 text-rose-900" :
+                                                                 "border-amber-300 bg-amber-50 text-amber-900"
+                                                              )}
+                                                            >
+                                                               <option value="cumple">🟢 Cumple (EPP Completo)</option>
+                                                               <option value="no_cumple">🔴 No Cumple (Sin EPP)</option>
+                                                               <option value="parcial">🟡 Parcial (EPP Incompleto)</option>
+                                                            </select>
+                                                         ) : (
+                                                            <Badge className={cn(
+                                                               "text-[10px] font-bold border-none h-7 flex items-center justify-center",
+                                                               p.status === 'cumple' ? "bg-emerald-100 text-emerald-800" :
+                                                               p.status === 'no_cumple' ? "bg-rose-100 text-rose-900" :
+                                                               "bg-amber-100 text-amber-900"
+                                                            )}>
+                                                               {p.status === 'cumple' ? '🟢 EPP Completo' : p.status === 'no_cumple' ? '🔴 No usa EPP' : '🟡 EPP Parcial'}
+                                                            </Badge>
+                                                         )}
+                                                      </div>
+
+                                                      {/* Delete person */}
+                                                      {isEditing && (
+                                                         <div className="sm:col-span-1 flex justify-end pt-3 sm:pt-0">
+                                                            <Button 
+                                                              type="button" 
+                                                              variant="ghost" 
+                                                              size="icon" 
+                                                              className="h-7 w-7 text-rose-500 hover:bg-rose-100 rounded-lg"
+                                                              onClick={() => removeAuditedPerson(insp.id, p.id)}
+                                                              title="Quitar persona"
+                                                            >
+                                                               <Trash2 size={13} />
+                                                            </Button>
+                                                         </div>
+                                                      )}
+                                                   </div>
+
+                                                   {/* Person specific observation / missing EPP note */}
+                                                   <div className="space-y-1 pt-1">
+                                                      <Input 
+                                                        placeholder="Detalle o EPP faltante (ej: Uso correcto / Falta arnés de seguridad o barbiquejo)..."
+                                                        value={p.details || ''}
+                                                        disabled={!isEditing}
+                                                        onChange={e => updateAuditedPerson(insp.id, p.id, 'details', e.target.value)}
+                                                        className="h-7 rounded-lg text-[11px] bg-white border-neutral-200"
+                                                      />
+                                                   </div>
+                                                </div>
+                                             ))}
+                                          </div>
+                                       </div>
+
+                                       {/* General Observations for this Fiscalización */}
+                                       <div className="space-y-1">
+                                          <Label className="text-[11px] font-bold text-neutral-600">Observaciones Generales de la Fiscalización</Label>
+                                          <Input 
+                                            placeholder="Ej: Se realizó llamado de atención y corrección en terreno..."
+                                            value={insp.summaryNote || ''}
+                                            disabled={!isEditing}
+                                            onChange={e => updateEppInspection(insp.id, 'summaryNote', e.target.value)}
+                                            className="h-8 rounded-xl text-xs"
+                                          />
+                                       </div>
+
+                                       {/* Photo / Evidence Image for EPP Fiscalización */}
+                                       <div className="pt-2 flex items-center justify-between border-t border-neutral-100">
+                                          <Label className="text-[11px] font-bold text-neutral-500 flex items-center gap-1">
+                                             <Camera size={13} className="text-emerald-600" />
+                                             Foto de Evidencia de Fiscalización
+                                          </Label>
+                                          {insp.image ? (
+                                             <div className="relative h-14 w-14 rounded-xl overflow-hidden group/img border border-emerald-300 shadow-sm">
+                                                <img src={insp.image} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(insp.image, '_blank')} alt="Evidencia EPP" />
+                                                {isEditing && (
+                                                   <Button type="button" size="icon" variant="destructive" className="absolute inset-0 w-full h-full opacity-0 group-hover/img:opacity-100 transition-opacity" onClick={() => updateEppInspection(insp.id, 'image', undefined)}>
+                                                      <X size={14} />
+                                                   </Button>
+                                                )}
+                                             </div>
+                                          ) : (
+                                             isEditing && (
+                                                <div className="flex items-center gap-1.5">
+                                                   <div className="relative group/upload">
+                                                      <input
+                                                        type="file"
+                                                        accept="image/*"
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                                        onChange={(e) => {
+                                                           const file = e.target.files?.[0];
+                                                           if (file) handleEppInspectionImage(insp.id, file);
+                                                        }}
+                                                      />
+                                                      <Button type="button" variant="outline" size="sm" className="h-8 rounded-xl text-xs text-neutral-700 bg-white border-neutral-200 gap-1">
+                                                         <Upload size={13} /> Subir
+                                                      </Button>
+                                                   </div>
+                                                   <Button 
+                                                     type="button"
+                                                     variant="outline" 
+                                                     size="sm" 
+                                                     className="h-8 rounded-xl text-xs font-bold text-emerald-800 bg-emerald-50 border-emerald-200 hover:bg-emerald-100 gap-1"
+                                                     onClick={() => {
+                                                        setActiveEppInspectionId(insp.id);
+                                                        setCameraOpen(true);
+                                                     }}
+                                                   >
+                                                      <Camera size={13} /> Sacar Foto
                                                    </Button>
                                                 </div>
                                              )

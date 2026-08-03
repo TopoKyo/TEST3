@@ -129,6 +129,26 @@ export interface SafetyTicket {
   createdAt?: string;
 }
 
+export interface EppAuditedPerson {
+  id: string;
+  name: string;
+  company?: string;
+  status: 'cumple' | 'no_cumple' | 'parcial';
+  details?: string;
+}
+
+export interface EppInspection {
+  id: string;
+  number: number;
+  time?: string;
+  sector?: string;
+  inspector?: string;
+  auditedPeople: EppAuditedPerson[];
+  summaryNote?: string;
+  image?: string;
+  createdAt?: string;
+}
+
 export interface SafetyChecklist {
   morningTalk: boolean;
   eppUsage: boolean;
@@ -140,6 +160,7 @@ export interface SafetyChecklist {
   observations: string;
   incidents: string;
   tickets?: SafetyTicket[];
+  eppInspections?: EppInspection[];
 }
 
 export interface ProblemEntry {
