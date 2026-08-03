@@ -30,6 +30,7 @@ export interface Product {
   unit: string;
   lowStockThreshold: number;
   location?: string;
+  isEpp?: boolean;
 }
 
 export type MovementType = 'entry' | 'exit';
@@ -45,6 +46,24 @@ export interface InventoryMovement {
   timestamp: string;
   observation?: string;
   reason?: string;
+  isEppDelivery?: boolean;
+  eppSize?: string;
+  eppCondition?: string;
+}
+
+export interface EPPDelivery {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  recipientId: string;
+  recipientName: string;
+  deliveredById?: string;
+  deliveredByName?: string;
+  timestamp: string;
+  size?: string;
+  condition?: string;
+  observation?: string;
 }
 
 export interface WorkLog {
