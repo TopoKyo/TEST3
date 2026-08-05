@@ -1374,13 +1374,30 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                                 </div>
                                 <div className="flex gap-1.5 mt-1 overflow-x-auto py-1 items-center">
                                   {task.photos && task.photos.map((ph, idx) => (
-                                    <div key={idx} className="relative w-12 h-10 border border-zinc-200 rounded-md overflow-hidden bg-zinc-50 shrink-0">
+                                    <div key={idx} className="relative group/photo w-12 h-10 border border-zinc-200 rounded-md overflow-hidden bg-zinc-50 shrink-0">
                                       <img 
                                         src={ph} 
                                         alt="Evidencia" 
-                                        className="w-full h-full object-cover" 
+                                        className="w-full h-full object-cover cursor-pointer hover:opacity-80" 
                                         referrerPolicy="no-referrer"
+                                        onClick={() => window.open(ph, '_blank')}
                                       />
+                                      {task.selected && (
+                                        <button
+                                          type="button"
+                                          title="Eliminar evidencia"
+                                          className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-0.5 shadow-md z-10 transition-transform active:scale-95 cursor-pointer flex items-center justify-center"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setLoadedTasks(prev => prev.map(t => 
+                                              t.id === task.id ? { ...t, photos: (t.photos || []).filter((_, pI) => pI !== idx) } : t
+                                            ));
+                                            toast.success("Evidencia eliminada");
+                                          }}
+                                        >
+                                          <X className="w-2.5 h-2.5" />
+                                        </button>
+                                      )}
                                     </div>
                                   ))}
                                   {task.selected && (

@@ -1413,22 +1413,46 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                              </select>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               {a.image ? (
-                                <div className="relative group/img">
-                                  <img 
-                                    src={a.image} 
-                                    alt="Activity" 
-                                    className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
-                                    onClick={() => window.open(a.image, '_blank')}
-                                  />
+                                <div className="relative group/img flex items-center gap-1">
+                                  <div className="relative">
+                                    <img 
+                                      src={a.image} 
+                                      alt="Foto Actividad" 
+                                      className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
+                                      onClick={() => window.open(a.image, '_blank')}
+                                      title="Ver foto a tamaño completo"
+                                    />
+                                    {isEditing && (
+                                      <button 
+                                        type="button"
+                                        title="Eliminar foto de la actividad"
+                                        className="absolute -top-1.5 -right-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-0.5 shadow-md z-10 transition-transform active:scale-95 cursor-pointer flex items-center justify-center"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateItem('activities', a.id, 'image', null);
+                                          toast.success("Foto eliminada de la actividad");
+                                        }}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    )}
+                                  </div>
                                   {isEditing && (
-                                    <button 
-                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
-                                      onClick={() => updateItem('activities', a.id, 'image', null)}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                      title="Eliminar foto"
+                                      onClick={() => {
+                                        updateItem('activities', a.id, 'image', null);
+                                        toast.success("Foto eliminada de la actividad");
+                                      }}
                                     >
-                                      <X size={10} />
-                                    </button>
+                                      <Trash2 size={13} />
+                                    </Button>
                                   )}
                                 </div>
                               ) : (
@@ -1547,22 +1571,46 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                              </select>
                           </TableCell>
                           <TableCell>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-1.5">
                               {a.image ? (
-                                <div className="relative group/img">
-                                  <img 
-                                    src={a.image} 
-                                    alt="Activity" 
-                                    className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
-                                    onClick={() => window.open(a.image, '_blank')}
-                                  />
+                                <div className="relative group/img flex items-center gap-1">
+                                  <div className="relative">
+                                    <img 
+                                      src={a.image} 
+                                      alt="Foto Actividad" 
+                                      className="h-10 w-10 rounded-xl object-cover cursor-pointer hover:opacity-80 border border-neutral-200 shadow-sm"
+                                      onClick={() => window.open(a.image, '_blank')}
+                                      title="Ver foto a tamaño completo"
+                                    />
+                                    {isEditing && (
+                                      <button 
+                                        type="button"
+                                        title="Eliminar foto de la actividad"
+                                        className="absolute -top-1.5 -right-1.5 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-0.5 shadow-md z-10 transition-transform active:scale-95 cursor-pointer flex items-center justify-center"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          updateItem('activities', a.id, 'image', null);
+                                          toast.success("Foto eliminada de la actividad");
+                                        }}
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    )}
+                                  </div>
                                   {isEditing && (
-                                    <button 
-                                      className="absolute -top-1 -right-1 bg-rose-500 text-white rounded-full p-0.5 opacity-0 group-hover/img:opacity-100 transition-opacity shadow-sm"
-                                      onClick={() => updateItem('activities', a.id, 'image', null)}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                      title="Eliminar foto"
+                                      onClick={() => {
+                                        updateItem('activities', a.id, 'image', null);
+                                        toast.success("Foto eliminada de la actividad");
+                                      }}
                                     >
-                                      <X size={10} />
-                                    </button>
+                                      <Trash2 size={13} />
+                                    </Button>
                                   )}
                                 </div>
                               ) : (
@@ -2013,11 +2061,37 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                        <div className="pt-2 flex items-center justify-between border-t border-neutral-100">
                                           <Label className="text-[11px] font-bold text-neutral-500">Foto de Evidencia SSO</Label>
                                           {t.image ? (
-                                             <div className="relative h-12 w-12 rounded-xl overflow-hidden group/img border border-neutral-200">
-                                                <img src={t.image} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(t.image, '_blank')} alt="" />
+                                             <div className="relative flex items-center gap-1.5">
+                                                <div className="relative h-12 w-12 rounded-xl overflow-hidden group/img border border-neutral-200 shadow-sm">
+                                                   <img src={t.image} className="w-full h-full object-cover cursor-pointer hover:opacity-80" onClick={() => window.open(t.image, '_blank')} alt="Foto SSO" title="Ver foto" />
+                                                   {isEditing && (
+                                                      <button 
+                                                        type="button" 
+                                                        title="Eliminar foto"
+                                                        className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-0.5 shadow-md z-10 cursor-pointer flex items-center justify-center"
+                                                        onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           updateSafetyTicket(t.id, 'image', undefined);
+                                                           toast.success("Foto de evidencia eliminada");
+                                                        }}
+                                                      >
+                                                         <X size={10} />
+                                                      </button>
+                                                   )}
+                                                </div>
                                                 {isEditing && (
-                                                   <Button type="button" size="icon" variant="destructive" className="absolute inset-0 w-full h-full opacity-0 group-hover/img:opacity-100 transition-opacity" onClick={() => updateSafetyTicket(t.id, 'image', undefined)}>
-                                                      <X size={14} />
+                                                   <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                                      title="Eliminar foto"
+                                                      onClick={() => {
+                                                         updateSafetyTicket(t.id, 'image', undefined);
+                                                         toast.success("Foto de evidencia eliminada");
+                                                      }}
+                                                   >
+                                                      <Trash2 size={13} />
                                                    </Button>
                                                 )}
                                              </div>
@@ -2316,11 +2390,37 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                                              Foto de Evidencia de Fiscalización
                                           </Label>
                                           {insp.image ? (
-                                             <div className="relative h-14 w-14 rounded-xl overflow-hidden group/img border border-emerald-300 shadow-sm">
-                                                <img src={insp.image} className="w-full h-full object-cover cursor-pointer" onClick={() => window.open(insp.image, '_blank')} alt="Evidencia EPP" />
+                                             <div className="relative flex items-center gap-1.5">
+                                                <div className="relative h-14 w-14 rounded-xl overflow-hidden group/img border border-emerald-300 shadow-sm">
+                                                   <img src={insp.image} className="w-full h-full object-cover cursor-pointer hover:opacity-80" onClick={() => window.open(insp.image, '_blank')} alt="Evidencia EPP" title="Ver foto" />
+                                                   {isEditing && (
+                                                      <button 
+                                                        type="button" 
+                                                        title="Eliminar foto"
+                                                        className="absolute -top-1 -right-1 bg-rose-500 hover:bg-rose-600 text-white rounded-full p-0.5 shadow-md z-10 cursor-pointer flex items-center justify-center"
+                                                        onClick={(e) => {
+                                                           e.stopPropagation();
+                                                           updateEppInspection(insp.id, 'image', undefined);
+                                                           toast.success("Foto de evidencia eliminada");
+                                                        }}
+                                                      >
+                                                         <X size={10} />
+                                                      </button>
+                                                   )}
+                                                </div>
                                                 {isEditing && (
-                                                   <Button type="button" size="icon" variant="destructive" className="absolute inset-0 w-full h-full opacity-0 group-hover/img:opacity-100 transition-opacity" onClick={() => updateEppInspection(insp.id, 'image', undefined)}>
-                                                      <X size={14} />
+                                                   <Button
+                                                      type="button"
+                                                      variant="ghost"
+                                                      size="icon"
+                                                      className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
+                                                      title="Eliminar foto"
+                                                      onClick={() => {
+                                                         updateEppInspection(insp.id, 'image', undefined);
+                                                         toast.success("Foto de evidencia eliminada");
+                                                      }}
+                                                   >
+                                                      <Trash2 size={13} />
                                                    </Button>
                                                 )}
                                              </div>
