@@ -5,6 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Camera, UserCheck, AlertCircle, Clock, Coffee, LogOut, ArrowRight, RefreshCcw, Search, User as UserIcon } from 'lucide-react';
 import { User, AttendanceType, ATTENDANCE_LABELS, AttendanceLog } from '@/src/types';
+import { getOfficialStartTime, getDelayInfo } from '@/src/lib/attendanceUtils';
+import { format } from 'date-fns';
 import { faceService } from '@/src/lib/faceService';
 import * as faceapi from 'face-api.js';
 import { firestoreService } from '@/src/lib/firestoreService';
@@ -239,7 +241,18 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
 
       await firestoreService.add('attendance', newLog);
       
-      toast.success(`Asistencia de ${ATTENDANCE_LABELS[type]} registrada para ${recognizedUser.name}`);
+      if (type === 'arrival') {
+        const officialStart = getOfficialStartTime();
+        const delayInfo = getDelayInfo(now.toISOString(), officialStart);
+        if (delayInfo.isLate) {
+          toast.warning(`Llegada registrada para ${recognizedUser.name}: +${delayInfo.delayMinutes} min de atraso (Horario oficial: ${officialStart})`);
+        } else {
+          toast.success(`Llegada registrada a tiempo para ${recognizedUser.name} (${format(now, 'HH:mm')})`);
+        }
+      } else {
+        toast.success(`Asistencia de ${ATTENDANCE_LABELS[type]} registrada para ${recognizedUser.name}`);
+      }
+
       onLogCreated();
       setRecognizedUser(null);
       setSelectedUserId(null);
