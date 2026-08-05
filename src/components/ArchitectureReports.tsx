@@ -435,20 +435,10 @@ export default function ArchitectureReports() {
           <h4 className="font-bold text-md text-neutral-900">Firmas Electrónicas del Equipo Profesional</h4>
         </div>
         <p className="text-xs text-neutral-500">
-          Dibuje la firma electrónica directamente en el cuadro correspondiente para el Arquitecto, Ingeniero Civil y Prevencionista de Riesgos.
+          Dibuje la firma electrónica directamente en el cuadro correspondiente para el Ingeniero Civil y Prevencionista de Riesgos.
         </p>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
-          <SignaturePad
-            title="Arquitecto / Prof. Responsable"
-            role="Nombre Arquitecto / Profesional"
-            name={currentReport?.professional || ''}
-            onNameChange={(val) => updateField('professional', val)}
-            signature={currentReport?.architectSignature}
-            onSignatureChange={(sig) => updateField('architectSignature', sig)}
-            placeholderName="Ej: Arq. Juan Pérez"
-          />
-
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
           <SignaturePad
             title="Ingeniero Civil"
             role="Nombre Ingeniero Civil"
@@ -753,12 +743,6 @@ export default function ArchitectureReports() {
 
       const sigs = [
         {
-          role: 'Arquitecto / Prof. a Cargo',
-          name: currentReport.professional || 'Profesional Responsable',
-          reg: '',
-          signature: currentReport.architectSignature
-        },
-        {
           role: 'Ingeniero Civil',
           name: currentReport.civilEngineerName || 'Ingeniero Civil',
           reg: currentReport.civilEngineerReg ? `Reg/RUT: ${currentReport.civilEngineerReg}` : '',
@@ -772,9 +756,9 @@ export default function ArchitectureReports() {
         }
       ];
 
-      const colWidth = 52;
+      const colWidth = 80; // adjusted width for two columns instead of 3
       const startX = 20;
-      const gap = 7;
+      const gap = 15;
 
       for (let i = 0; i < sigs.length; i++) {
         const s = sigs[i];
