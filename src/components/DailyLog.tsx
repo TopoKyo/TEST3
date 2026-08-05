@@ -614,6 +614,24 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     }
   };
 
+  const handleDeleteLog = async () => {
+    if (!currentLog) return;
+    if (window.confirm('¿Está seguro de que desea eliminar permanentemente este informe diario?')) {
+      try {
+        const existing = logs.some(l => l.id === currentLog.id);
+        if (existing) {
+          await firestoreService.delete('workLogs', currentLog.id);
+          toast.success('Bitácora eliminada');
+          fetchLogs();
+        }
+        setCurrentLog(null);
+        setIsEditing(false);
+      } catch (e) {
+        toast.error('Error al eliminar la bitácora');
+      }
+    }
+  };
+
   const handleDuplicate = () => {
     if (logs.length === 0) {
       toast.info('No hay bitácoras previas para duplicar');
@@ -1259,9 +1277,14 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                   </Button>
                 </>
               ) : (
-                <Button className="rounded-xl px-8" onClick={() => setIsEditing(true)}>
-                  <Pencil className="mr-2 h-4 w-4" /> Editar Datos
-                </Button>
+                <>
+                  <Button variant="ghost" className="rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-50" onClick={handleDeleteLog}>
+                    <Trash2 className="mr-2 h-4 w-4" /> Eliminar
+                  </Button>
+                  <Button className="rounded-xl px-8" onClick={() => setIsEditing(true)}>
+                    <Pencil className="mr-2 h-4 w-4" /> Editar Datos
+                  </Button>
+                </>
               )}
             </div>
           </div>

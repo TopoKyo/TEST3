@@ -60,7 +60,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  // do not throw to allow graceful fallback
 }
 
 function cleanUndefined<T>(obj: T): T {
@@ -93,8 +93,8 @@ export const firestoreService = {
       const snap = await getDocs(collection(db, collectionPath));
       return snap.docs.map(doc => doc.data() as T);
     } catch (error) {
-      if (error instanceof Error && (error.message.includes('offline') || error.message.includes('network'))) {
-        // Fallback to cache since we are offline
+      if (error instanceof Error && (error.message.toLowerCase().includes('offline') || error.message.toLowerCase().includes('network') || error.message.toLowerCase().includes('quota'))) {
+        // Fallback to cache since we are offline or over quota
         try {
           const cacheSnap = await getDocsFromCache(collection(db, collectionPath));
           if (!cacheSnap.empty) {
@@ -122,7 +122,7 @@ export const firestoreService = {
       const snap = await getDoc(docRef);
       return snap.exists() ? (snap.data() as T) : null;
     } catch (error) {
-      if (error instanceof Error && (error.message.includes('offline') || error.message.includes('network'))) {
+      if (error instanceof Error && (error.message.toLowerCase().includes('offline') || error.message.toLowerCase().includes('network') || error.message.toLowerCase().includes('quota'))) {
         // Fallback to cache
         try {
           const cacheSnap = await getDocFromCache(doc(db, collectionPath, id));

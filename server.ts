@@ -322,7 +322,7 @@ async function startServer() {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: prompt,
         config: {
           systemInstruction,
@@ -385,7 +385,7 @@ async function startServer() {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-1.5-flash",
         contents: `
           Actúa como un Ingeniero de Obra Senior y Analista de Proyectos. 
           Genera un resumen ejecutivo profesional basado en las siguientes estadísticas de bitácora de obra y el contexto técnico del proyecto:
@@ -415,6 +415,83 @@ async function startServer() {
     } catch (err) {
       console.warn("Fallo temporal o de demanda en Gemini (Consolidated Report):", err);
       res.json({ text: generateLocalHeuristicProgressSummary(stats, projectContext) });
+    }
+  });
+
+  app.post("/api/gemini/generate-arch-report", async (req, res) => {
+    const { report } = req.body;
+    try {
+      const apiKey = process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.status(500).json({ error: "La API key de Gemini no está configurada" });
+      }
+
+      const ai = new GoogleGenAI({ 
+        apiKey,
+        httpOptions: {
+          headers: {
+            'User-Agent': 'aistudio-build'
+          }
+        }
+      });
+
+      const systemInstruction = `
+        Actúa como un Arquitecto de Software Senior y Evaluador Técnico.
+        Debes generar un Informe Técnico de Arquitectura completo, basándote en los datos del formulario proporcionado.
+        Usa lenguaje técnico, profesional y estructurado. No inventes información, si faltan datos indícalo o genera una inferencia técnica lógica.
+      `;
+
+      const prompt = `
+        Genera el contenido para un Informe Técnico de Arquitectura basado en la siguiente información:
+        ${JSON.stringify(report, null, 2)}
+        
+        Devuelve estrictamente un objeto JSON con las siguientes claves y texto descriptivo en español para cada sección:
+        {
+          "antecedentes": "...",
+          "objetivo": "...",
+          "metodologia": "...",
+          "descripcion": "...",
+          "observaciones": "...",
+          "analisis": "...",
+          "evaluacion": "...",
+          "conclusiones": "...",
+          "recomendaciones": "...",
+          "anexos": "..."
+        }
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-1.5-flash",
+        contents: prompt,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+          temperature: 0.2,
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              antecedentes: { type: Type.STRING },
+              objetivo: { type: Type.STRING },
+              metodologia: { type: Type.STRING },
+              descripcion: { type: Type.STRING },
+              observaciones: { type: Type.STRING },
+              analisis: { type: Type.STRING },
+              evaluacion: { type: Type.STRING },
+              conclusiones: { type: Type.STRING },
+              recomendaciones: { type: Type.STRING },
+              anexos: { type: Type.STRING }
+            },
+            required: ["antecedentes", "objetivo", "metodologia", "descripcion", "observaciones", "analisis", "evaluacion", "conclusiones", "recomendaciones", "anexos"]
+          }
+        }
+      });
+
+      const textOutput = response.text || "{}";
+      const resultData = JSON.parse(textOutput);
+      res.json({ content: resultData });
+    } catch (err) {
+      console.warn("Error en generate-arch-report:", err);
+      res.status(500).json({ error: "Fallo al generar el informe con IA" });
     }
   });
 

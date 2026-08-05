@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw, Award, FileCheck, AlertTriangle } from 'lucide-react';
+import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw, Award, FileCheck, AlertTriangle, Building2 } from 'lucide-react';
 import Scanner from './components/Scanner';
 import UserManagement from './components/UserManagement';
 import AttendanceHistory from './components/AttendanceHistory';
@@ -19,6 +19,7 @@ import { SoftSkillsForm } from './components/SoftSkillsForm';
 import { SoftSkillsReport } from './components/SoftSkillsReport';
 import WeeklyReportModule from './components/WeeklyReportModule';
 import ExceptionalReportModule from './components/ExceptionalReportModule';
+import ArchitectureReports from './components/ArchitectureReports';
 import { User, AttendanceLog, InventoryMovement, WorkLog, WishListItem } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
@@ -28,7 +29,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -84,6 +85,7 @@ export default function App() {
     { id: 'worklogs', label: 'Bitácora de Obra', icon: ClipboardList },
     { id: 'weekly-report', label: 'Informe Semanal', icon: FileCheck },
     { id: 'exceptional', label: 'Informe Excepcional', icon: AlertTriangle },
+    { id: 'architecture', label: 'Arquitectura', icon: Building2 },
     { id: 'evaluations', label: 'Habilidades Blandas', icon: Award },
     { id: 'skill-reports', label: 'Informes de Personal', icon: FileBarChart },
   ];
@@ -188,6 +190,7 @@ export default function App() {
       case 'worklogs': return <DailyLog users={users} attendanceLogs={logs} />;
       case 'weekly-report': return <WeeklyReportModule users={users} workLogs={workLogs} onReportSaved={refreshData} />;
       case 'exceptional': return <ExceptionalReportModule users={users} />;
+      case 'architecture': return <ArchitectureReports />;
       case 'wishlist': return <WishList users={users} />;
       case 'evaluations': return <SoftSkillsForm users={users} />;
       case 'skill-reports': return <SoftSkillsReport users={users} />;

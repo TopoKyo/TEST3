@@ -310,3 +310,79 @@ export interface WeeklyReport {
   productivityScore: number;
 }
 
+export interface ArchFinding {
+  id: string;
+  element: string;
+  location: string;
+  description: string;
+  state: string;
+  deteriorationLevel: string;
+  probableCause: string;
+  riskLevel: string;
+  photo?: string;
+  sketch?: string;
+  observations: string;
+}
+
+export interface ArchPhoto {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  findingId?: string;
+  url: string;
+}
+
+export interface ArchReport {
+  id: string;
+  number: string;
+  date: string;
+  client: string;
+  professional: string;
+  address: string;
+  commune: string;
+  region: string;
+  role: string;
+  propertyType: string;
+  use: string;
+  approximateYear: string;
+  area: string;
+  observations: string;
+  
+  inspectionReasons: string[];
+  inspectionReasonPdf?: string;
+
+  inspectionDate: string;
+  inspectionTime: string;
+  presentProfessionals: string;
+  weatherConditions: string;
+  inspectedSectors: string;
+  inspectionMethod: string;
+  limitations: string;
+
+  findings: ArchFinding[];
+  photos: ArchPhoto[];
+  
+  regulations: string[];
+  otherRegulation?: string;
+  recommendations: string;
+  conclusions: string;
+
+  aiContent?: {
+    antecedentes: string;
+    objetivo: string;
+    metodologia: string;
+    descripcion: string;
+    observaciones: string;
+    analisis: string;
+    evaluacion: string;
+    conclusiones: string;
+    recomendaciones: string;
+    anexos: string;
+  };
+
+  status: 'draft' | 'completed';
+  createdAt: string;
+  updatedAt: string;
+}
+
