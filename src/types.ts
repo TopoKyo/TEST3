@@ -381,6 +381,16 @@ export interface ArchReport {
     anexos: string;
   };
 
+  architectSignature?: string;
+
+  civilEngineerName?: string;
+  civilEngineerReg?: string;
+  civilEngineerSignature?: string;
+
+  riskPrevName?: string;
+  riskPrevReg?: string;
+  riskPrevSignature?: string;
+
   status: 'draft' | 'completed';
   createdAt: string;
   updatedAt: string;

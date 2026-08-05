@@ -10,9 +10,10 @@ import {
   Building2, Plus, Search, FileText, Check, 
   Clock, MapPin, ChevronRight, ChevronLeft,
   Camera, FileDown, Printer, Wand2,
-  Trash2, Image as ImageIcon, Sparkles, Upload
+  Trash2, Image as ImageIcon, Sparkles, Upload, PenTool
 } from 'lucide-react';
 import { ArchReport, ArchFinding, ArchPhoto } from '../types';
+import { SignaturePad } from './SignaturePad';
 import { firestoreService } from '../lib/firestoreService';
 import { compressImage } from '../lib/imageUtils';
 import { cn } from '@/lib/utils';
@@ -70,6 +71,13 @@ export default function ArchitectureReports() {
       regulations: [],
       recommendations: '',
       conclusions: '',
+      architectSignature: undefined,
+      civilEngineerName: '',
+      civilEngineerReg: '',
+      civilEngineerSignature: undefined,
+      riskPrevName: '',
+      riskPrevReg: '',
+      riskPrevSignature: undefined,
       status: 'draft',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -404,16 +412,68 @@ export default function ArchitectureReports() {
   };
 
   const renderStep7 = () => (
-    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
-      <h3 className="text-lg font-bold">Recomendaciones y Conclusiones Preliminares</h3>
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+      <div>
+        <h3 className="text-lg font-bold">Recomendaciones, Conclusiones y Firmas Electrónicas</h3>
+        <p className="text-sm text-neutral-500">Ingrese las conclusiones finales y registre las firmas electrónicas del equipo profesional.</p>
+      </div>
+
       <div className="space-y-4">
         <div className="space-y-2">
           <Label>Recomendaciones</Label>
-          <Textarea className="min-h-[150px]" value={currentReport?.recommendations || ''} onChange={e => updateField('recommendations', e.target.value)} />
+          <Textarea className="min-h-[120px]" value={currentReport?.recommendations || ''} onChange={e => updateField('recommendations', e.target.value)} placeholder="Indique las recomendaciones técnicas..." />
         </div>
         <div className="space-y-2">
-          <Label>Conclusiones Preliminares</Label>
-          <Textarea className="min-h-[150px]" value={currentReport?.conclusions || ''} onChange={e => updateField('conclusions', e.target.value)} />
+          <Label>Conclusiones Preliminares / Finales</Label>
+          <Textarea className="min-h-[120px]" value={currentReport?.conclusions || ''} onChange={e => updateField('conclusions', e.target.value)} placeholder="Resuma las conclusiones técnicas..." />
+        </div>
+      </div>
+
+      <div className="pt-6 border-t border-neutral-200 space-y-4">
+        <div className="flex items-center gap-2">
+          <PenTool className="h-5 w-5 text-blue-600" />
+          <h4 className="font-bold text-md text-neutral-900">Firmas Electrónicas del Equipo Profesional</h4>
+        </div>
+        <p className="text-xs text-neutral-500">
+          Dibuje la firma electrónica directamente en el cuadro correspondiente para el Arquitecto, Ingeniero Civil y Prevencionista de Riesgos.
+        </p>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
+          <SignaturePad
+            title="Arquitecto / Prof. Responsable"
+            role="Nombre Arquitecto / Profesional"
+            name={currentReport?.professional || ''}
+            onNameChange={(val) => updateField('professional', val)}
+            signature={currentReport?.architectSignature}
+            onSignatureChange={(sig) => updateField('architectSignature', sig)}
+            placeholderName="Ej: Arq. Juan Pérez"
+          />
+
+          <SignaturePad
+            title="Ingeniero Civil"
+            role="Nombre Ingeniero Civil"
+            name={currentReport?.civilEngineerName || ''}
+            onNameChange={(val) => updateField('civilEngineerName', val)}
+            regNumber={currentReport?.civilEngineerReg || ''}
+            onRegNumberChange={(val) => updateField('civilEngineerReg', val)}
+            regLabel="N° Reg. / RUT"
+            signature={currentReport?.civilEngineerSignature}
+            onSignatureChange={(sig) => updateField('civilEngineerSignature', sig)}
+            placeholderName="Ej: Ing. Roberto Gómez"
+          />
+
+          <SignaturePad
+            title="Prevencionista de Riesgos"
+            role="Nombre Prevencionista de Riesgos"
+            name={currentReport?.riskPrevName || ''}
+            onNameChange={(val) => updateField('riskPrevName', val)}
+            regNumber={currentReport?.riskPrevReg || ''}
+            onRegNumberChange={(val) => updateField('riskPrevReg', val)}
+            regLabel="N° Reg. SNS / RUT"
+            signature={currentReport?.riskPrevSignature}
+            onSignatureChange={(sig) => updateField('riskPrevSignature', sig)}
+            placeholderName="Ej: Carlos Silva"
+          />
         </div>
       </div>
     </div>
@@ -675,27 +735,85 @@ export default function ArchitectureReports() {
       }
 
       // Signature Section
-      if (currentY > 220) {
+      if (currentY > 200) {
         drawFooter(pageNum);
         doc.addPage();
         pageNum++;
         await drawHeader('CIERRE Y FIRMAS');
         currentY = 45;
+      } else {
+        currentY += 25;
       }
       
-      currentY += 50;
-      doc.setDrawColor(150, 150, 150);
-      doc.line(60, currentY, 150, currentY);
-      doc.setFontSize(11);
-      doc.setTextColor(40, 40, 40);
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text(currentReport.professional || 'Profesional Responsable', 105, currentY + 10, { align: 'center' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(100, 100, 100);
-      doc.text('Arquitecto / Profesional a Cargo', 105, currentY + 15, { align: 'center' });
+      doc.setTextColor(40, 40, 40);
+      doc.text('VALIDACIÓN TÉCNICA Y FIRMAS ELECTRÓNICAS', 20, currentY);
+      currentY += 10;
+
+      const sigs = [
+        {
+          role: 'Arquitecto / Prof. a Cargo',
+          name: currentReport.professional || 'Profesional Responsable',
+          reg: '',
+          signature: currentReport.architectSignature
+        },
+        {
+          role: 'Ingeniero Civil',
+          name: currentReport.civilEngineerName || 'Ingeniero Civil',
+          reg: currentReport.civilEngineerReg ? `Reg/RUT: ${currentReport.civilEngineerReg}` : '',
+          signature: currentReport.civilEngineerSignature
+        },
+        {
+          role: 'Prevencionista de Riesgos',
+          name: currentReport.riskPrevName || 'Prevencionista de Riesgos',
+          reg: currentReport.riskPrevReg ? `Reg/RUT: ${currentReport.riskPrevReg}` : '',
+          signature: currentReport.riskPrevSignature
+        }
+      ];
+
+      const colWidth = 52;
+      const startX = 20;
+      const gap = 7;
+
+      for (let i = 0; i < sigs.length; i++) {
+        const s = sigs[i];
+        const x = startX + i * (colWidth + gap);
+
+        if (s.signature) {
+          try {
+            doc.addImage(s.signature, 'PNG', x + 6, currentY, 40, 20);
+          } catch(e) {
+            console.warn("Could not add signature image to PDF");
+          }
+        }
+
+        const lineY = currentY + 22;
+        doc.setDrawColor(180, 180, 180);
+        doc.line(x, lineY, x + colWidth, lineY);
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(40, 40, 40);
+        doc.text(s.role, x + colWidth / 2, lineY + 5, { align: 'center' });
+
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(80, 80, 80);
+        doc.text(s.name, x + colWidth / 2, lineY + 10, { align: 'center' });
+
+        if (s.reg) {
+          doc.setFontSize(7);
+          doc.setTextColor(120, 120, 120);
+          doc.text(s.reg, x + colWidth / 2, lineY + 14, { align: 'center' });
+        }
+      }
+
       if (currentReport.client) {
-         doc.text(`Cliente: ${currentReport.client}`, 105, currentY + 22, { align: 'center' });
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'italic');
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Cliente / Mandante: ${currentReport.client}`, 105, currentY + 45, { align: 'center' });
       }
 
       drawFooter(pageNum);
@@ -821,7 +939,7 @@ export default function ArchitectureReports() {
             {s}
           </div>
           <span className="text-[10px] font-medium text-neutral-500 whitespace-nowrap hidden sm:block">
-            {s === 1 ? 'General' : s === 2 ? 'Motivo' : s === 3 ? 'Inspección' : s === 4 ? 'Hallazgos' : s === 5 ? 'Fotos' : s === 6 ? 'Normativa' : s === 7 ? 'Recomendaciones' : 'Conclusión'}
+            {s === 1 ? 'General' : s === 2 ? 'Motivo' : s === 3 ? 'Inspección' : s === 4 ? 'Hallazgos' : s === 5 ? 'Fotos' : s === 6 ? 'Normativa' : s === 7 ? 'Firmas' : 'Informe IA'}
           </span>
         </div>
       ))}
@@ -849,8 +967,16 @@ export default function ArchitectureReports() {
           <Input value={currentReport?.client || ''} onChange={e => updateField('client', e.target.value)} placeholder="Nombre del cliente o empresa" />
         </div>
         <div className="space-y-2">
-          <Label>Profesional Responsable</Label>
-          <Input value={currentReport?.professional || ''} onChange={e => updateField('professional', e.target.value)} />
+          <Label>Arquitecto / Prof. Responsable</Label>
+          <Input value={currentReport?.professional || ''} onChange={e => updateField('professional', e.target.value)} placeholder="Nombre del Arquitecto" />
+        </div>
+        <div className="space-y-2">
+          <Label>Ingeniero Civil</Label>
+          <Input value={currentReport?.civilEngineerName || ''} onChange={e => updateField('civilEngineerName', e.target.value)} placeholder="Nombre del Ingeniero Civil" />
+        </div>
+        <div className="space-y-2">
+          <Label>Prevencionista de Riesgos</Label>
+          <Input value={currentReport?.riskPrevName || ''} onChange={e => updateField('riskPrevName', e.target.value)} placeholder="Nombre del Prevencionista" />
         </div>
         <div className="space-y-2 md:col-span-2">
           <Label>Dirección</Label>
