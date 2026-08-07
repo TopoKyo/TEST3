@@ -6,8 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FileDown, Plus, Trash2 } from 'lucide-react';
+import { FileDown, Plus, Trash2, Save, Loader2 } from 'lucide-react';
+import { firestoreService } from '../lib/firestoreService';
 import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { SignaturePad } from './SignaturePad';
 import { PenTool, CheckCircle2 } from 'lucide-react';
@@ -21,13 +24,63 @@ interface DeliveryItem {
   returnSignature?: string;
 }
 
+export interface EquipmentDeliveryList {
+  id: string;
+  projectName: string;
+  year: string;
+  items: DeliveryItem[];
+  createdAt: string;
+}
+
 export function EquipmentDeliverySheet({ users }: { users?: User[] }) {
+  const [savedLists, setSavedLists] = useState<EquipmentDeliveryList[]>([]);
+  const [isLoadingLists, setIsLoadingLists] = useState(false);
+
+  const fetchSavedLists = async () => {
+    setIsLoadingLists(true);
+    try {
+      const lists = await firestoreService.getAll<EquipmentDeliveryList>('equipmentDeliveries');
+      // Sort by newest first
+      lists.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setSavedLists(lists);
+    } catch (error) {
+      console.error("Error fetching saved lists:", error);
+    } finally {
+      setIsLoadingLists(false);
+    }
+  };
+
+  React.useEffect(() => {
+    fetchSavedLists();
+  }, []);
+
   const [projectName, setProjectName] = useState('PROYECTO BICENTENARIO');
   const [year, setYear] = useState(new Date().getFullYear().toString());
+  const [isSaving, setIsSaving] = useState(false);
   const [activeSignature, setActiveSignature] = useState<{id: string, type: 'delivery' | 'return'} | null>(null);
   const [items, setItems] = useState<DeliveryItem[]>([
     { id: crypto.randomUUID(), workerName: '', tools: '', date: new Date().toLocaleDateString('es-CL') }
   ]);
+
+  const saveList = async () => {
+    setIsSaving(true);
+    try {
+      await firestoreService.add('equipmentDeliveries', {
+        id: crypto.randomUUID(),
+        projectName,
+        year,
+        items,
+        createdAt: new Date().toISOString()
+      });
+      toast.success("Lista guardada exitosamente");
+      fetchSavedLists();
+    } catch (error) {
+      console.error("Error saving list:", error);
+      toast.error("Error al guardar la lista");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const addItem = () => {
     setItems([...items, { id: crypto.randomUUID(), workerName: '', tools: '', date: new Date().toLocaleDateString('es-CL') }]);
@@ -135,15 +188,34 @@ export function EquipmentDeliverySheet({ users }: { users?: User[] }) {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <Tabs defaultValue="new" className="w-full">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Ficha de Entrega de Herramientas</h1>
+            <p className="text-neutral-500">Gestiona las fichas técnicas de entrega de equipos</p>
+          </div>
+          <TabsList className="bg-white border border-neutral-200">
+            <TabsTrigger value="new">Nueva Ficha</TabsTrigger>
+            <TabsTrigger value="saved">Fichas Guardadas</TabsTrigger>
+          </TabsList>
+        </div>
+
+        <TabsContent value="new" className="space-y-6">
+          <div className="flex justify-end gap-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-neutral-900">Ficha de Entrega de Herramientas</h1>
           <p className="text-neutral-500">Genera fichas técnicas de entrega de equipos en PDF</p>
         </div>
-        <Button onClick={generatePDF} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 shadow-md">
-          <FileDown size={18} />
-          Generar PDF
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={saveList} disabled={isSaving} variant="outline" className="rounded-xl gap-2 bg-white">
+            {isSaving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+            Guardar Lista
+          </Button>
+          <Button onClick={generatePDF} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-2 shadow-md">
+            <FileDown size={18} />
+            Generar PDF
+          </Button>
+        </div>
       </div>
 
       <Card className="border-neutral-200/60 shadow-sm rounded-2xl overflow-hidden bg-white">
@@ -268,6 +340,77 @@ export function EquipmentDeliverySheet({ users }: { users?: User[] }) {
           )}
         </DialogContent>
       </Dialog>
+        </TabsContent>
+        <TabsContent value="saved" className="space-y-6">
+          <Card className="border-neutral-200/60 shadow-sm rounded-2xl overflow-hidden bg-white">
+            <CardHeader className="bg-neutral-50/50 border-b border-neutral-100">
+              <CardTitle className="text-lg font-semibold">Listas Guardadas</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs text-neutral-500 uppercase bg-neutral-50 border-b border-neutral-100">
+                    <tr>
+                      <th className="px-6 py-4">Proyecto</th>
+                      <th className="px-6 py-4">Año</th>
+                      <th className="px-6 py-4">Herramientas/Items</th>
+                      <th className="px-6 py-4">Fecha de Creación</th>
+                      <th className="px-6 py-4 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {isLoadingLists ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                          <Loader2 size={24} className="animate-spin mx-auto mb-2" />
+                          Cargando listas...
+                        </td>
+                      </tr>
+                    ) : savedLists.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="px-6 py-8 text-center text-neutral-500">
+                          No hay listas guardadas aún.
+                        </td>
+                      </tr>
+                    ) : (
+                      savedLists.map((list) => (
+                        <tr key={list.id} className="border-b border-neutral-50 last:border-0 hover:bg-neutral-50/50">
+                          <td className="px-6 py-4 font-medium text-neutral-900">{list.projectName}</td>
+                          <td className="px-6 py-4">{list.year}</td>
+                          <td className="px-6 py-4">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-neutral-100 text-neutral-800">
+                              {list.items.length} items
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-neutral-500">
+                            {new Date(list.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="rounded-lg gap-2"
+                              onClick={() => {
+                                setProjectName(list.projectName);
+                                setYear(list.year);
+                                setItems(list.items);
+                                toast.success("Lista cargada. Ve a 'Nueva Ficha' para editarla o generar el PDF.");
+                              }}
+                            >
+                              <Eye size={16} />
+                              Ver / Cargar
+                            </Button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
