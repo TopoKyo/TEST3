@@ -20,6 +20,7 @@ import { SoftSkillsReport } from './components/SoftSkillsReport';
 import WeeklyReportModule from './components/WeeklyReportModule';
 import ExceptionalReportModule from './components/ExceptionalReportModule';
 import ArchitectureReports from './components/ArchitectureReports';
+import { EquipmentDeliverySheet } from './components/EquipmentDeliverySheet';
 import { User, AttendanceLog, InventoryMovement, WorkLog, WishListItem } from './types';
 import { faceService } from './lib/faceService';
 import { firestoreService } from './lib/firestoreService';
@@ -29,7 +30,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -82,6 +83,7 @@ export default function App() {
     { id: 'history', label: 'Asistencia', icon: FileBarChart },
     { id: 'inventory', label: 'Inventario', icon: Package },
     { id: 'wishlist', label: 'Pendientes', icon: Sparkles },
+    { id: 'tools-delivery', label: 'Entrega Herramientas', icon: ClipboardList },
     { id: 'worklogs', label: 'Bitácora de Obra', icon: ClipboardList },
     { id: 'weekly-report', label: 'Informe Semanal', icon: FileCheck },
     { id: 'exceptional', label: 'Informe Excepcional', icon: AlertTriangle },
@@ -194,6 +196,7 @@ export default function App() {
       case 'wishlist': return <WishList users={users} />;
       case 'evaluations': return <SoftSkillsForm users={users} />;
       case 'skill-reports': return <SoftSkillsReport users={users} />;
+      case 'tools-delivery': return <EquipmentDeliverySheet users={users} />;
       default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
     }
   };
