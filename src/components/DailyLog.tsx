@@ -192,7 +192,8 @@ const EMPTY_LOG: Omit<WorkLog, 'id' | 'date'> = {
     eppInspections: []
   },
   problems: [],
-  nextDayPlan: []
+  nextDayPlan: [],
+  generalObservations: ''
 };
 
 export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
@@ -910,6 +911,16 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       }
     });
 
+    if (currentLog.generalObservations) {
+      autoTable(doc, {
+        startY: (doc as any).lastAutoTable.finalY + 5,
+        head: [['OBSERVACIONES GENERALES']],
+        body: [[currentLog.generalObservations]],
+        theme: 'grid',
+        headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255] }
+      });
+    }
+
     // Safety
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 5,
@@ -919,7 +930,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
         ['EPP Completo:', currentLog.safety.eppUsage ? 'SÍ' : 'NO'],
         ['Revisión Asistencia:', currentLog.safety.attendanceReview ? 'SÍ' : 'NO'],
         ['Incidentes:', currentLog.safety.incidents || 'Ninguno'],
-        ['Observaciones Grales:', currentLog.safety.observations || '-']
+        ['Observaciones SSO:', currentLog.safety.observations || '-']
       ],
       theme: 'grid'
     });
@@ -1777,6 +1788,19 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                     </div>
                  </LogSection>
               </div>
+
+              {/* Section 8: Observaciones Generales */}
+              <LogSection title="Observaciones Generales" icon={<FileText />} isEditing={isEditing}>
+                 <div className="bg-neutral-50/50 p-4 rounded-xl border border-neutral-100">
+                   <textarea
+                     value={currentLog?.generalObservations || ''}
+                     onChange={e => setCurrentLog(l => l ? {...l, generalObservations: e.target.value} : null)}
+                     disabled={!isEditing}
+                     className="w-full min-h-[100px] p-3 rounded-lg border border-neutral-200 bg-white resize-y focus:ring-1 focus:ring-primary outline-none"
+                     placeholder="Escribe aquí observaciones generales, comentarios adicionales o notas importantes del día..."
+                   />
+                 </div>
+              </LogSection>
             </div>
 
             {/* Sidebar Sections */}

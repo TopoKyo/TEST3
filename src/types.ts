@@ -92,6 +92,7 @@ export interface WorkLog {
   problems: ProblemEntry[];
   nextDayPlan: PlanEntry[];
   photos?: string[];
+  generalObservations?: string;
 }
 
 export interface PersonnelEntry {
