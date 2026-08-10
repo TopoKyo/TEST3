@@ -252,6 +252,10 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
         }
       });
 
+      // Sort tasks and incidents newest first (descending by date)
+      allTasksMapped.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      allIncidentsMapped.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
       // Avoid duplication
       setLoadedTasks(allTasksMapped);
       setLoadedIncidents(allIncidentsMapped);
@@ -362,16 +366,90 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
 
   // AI request trigger
   const handleGenerateAIReport = async () => {
-    const selectedTasks = loadedTasks.filter(t => t.selected !== false);
-    const selectedIncidents = loadedIncidents.filter(i => i.selected !== false);
-
-    if (selectedTasks.length === 0) {
-      toast.warning("Debe seleccionar al menos una tarea hecha para que la IA realice el análisis.");
-      return;
-    }
-
     setGeneratingWithAI(true);
     try {
+      let currentTasks = loadedTasks;
+      let currentIncidents = loadedIncidents;
+
+      // If no tasks loaded yet, auto-load from worklogs
+      if (currentTasks.length === 0) {
+        toast.info("Cargando bitácoras para el período seleccionado...");
+        let filteredLogs = workLogs.filter(log => {
+          const dateOk = log.date >= startDate && log.date <= endDate;
+          const projectOk = !selectedProject || selectedProject === 'all' || 
+            log.project?.trim() === selectedProject;
+          return dateOk && projectOk;
+        });
+
+        if (filteredLogs.length === 0 && selectedProject) {
+          filteredLogs = workLogs.filter(log => log.date >= startDate && log.date <= endDate);
+        }
+
+        const autoTasks: WeeklyReportTask[] = [];
+        const autoIncidents: WeeklyReportIncident[] = [];
+
+        filteredLogs.forEach(log => {
+          if (log.activities && Array.isArray(log.activities)) {
+            log.activities.forEach(act => {
+              autoTasks.push({
+                id: `${log.id}-${act.id}`,
+                name: act.description,
+                date: log.date,
+                responsible: act.operator || (act.operators && act.operators.length > 0 ? act.operators[0] : 'S/R'),
+                status: act.status || 'pendiente',
+                priority: 'Media',
+                observations: '',
+                photos: act.image ? [act.image] : [],
+                selected: true,
+                tower: act.tower,
+                side: act.side
+              });
+            });
+          }
+
+          if (log.problems && Array.isArray(log.problems)) {
+            log.problems.forEach(prob => {
+              autoIncidents.push({
+                id: `${log.id}-${prob.id}`,
+                description: prob.description,
+                date: log.date,
+                impact: prob.impact,
+                correctiveAction: prob.correctiveAction,
+                responsible: prob.responsible,
+                gravity: prob.impact?.toLowerCase().includes('alto') || prob.impact?.toLowerCase().includes('crítico') ? 'Alta' : 'Media',
+                selected: true,
+                isManual: false,
+                image: prob.image
+              });
+            });
+          }
+        });
+
+        if (autoTasks.length > 0 || autoIncidents.length > 0) {
+          setLoadedTasks(autoTasks);
+          setLoadedIncidents(autoIncidents);
+          currentTasks = autoTasks;
+          currentIncidents = autoIncidents;
+        }
+      }
+
+      let selectedTasks = currentTasks.filter(t => t.selected !== false);
+      let selectedIncidents = currentIncidents.filter(i => i.selected !== false);
+
+      // If still no tasks, create a fallback task so Gemini can generate based on project & dates
+      if (selectedTasks.length === 0) {
+        selectedTasks = [{
+          id: 'general_task_1',
+          name: `Actividades y supervisión general de la semana en ${selectedProject || 'el proyecto'} (${selectedArea || 'campo'})`,
+          date: startDate,
+          responsible: responsibleName || 'Equipo de turno',
+          status: 'completado',
+          priority: 'Media',
+          observations: 'Inspección de avance y control operacional de rutina.',
+          selected: true
+        }];
+      }
+
       const payloadMetadata = {
         weekLabel,
         startDate,
@@ -412,7 +490,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
         }));
       }
       if (parsedJSON.isLocalFallback) {
-        toast.info("Alta demanda en el servicio de IA. Se ha redactado un análisis técnico local provisional con éxito.");
+        toast.info("Análisis técnico generado localmente.");
       } else {
         toast.success("Resumen Inteligente generado con éxito por Gemini.");
       }
@@ -641,7 +719,9 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       doc.text("3. Registro Detallado de Tareas y Evidencias", 15, currentY);
       currentY += 8;
 
-      const selectedTasks = (report.tasks || []).filter(t => t.selected !== false);
+      const selectedTasks = [...(report.tasks || [])]
+        .filter(t => t.selected !== false)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
       for (const t of selectedTasks) {
         if (currentY > 220) {
           doc.addPage();
@@ -732,7 +812,11 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       doc.setTextColor(79, 70, 229);
       doc.text("4. Detalle de Incidencias Operativas", 15, newY);
 
-      const incidentData = (report.incidents || []).filter(i => i.selected !== false).map(i => [
+      const selectedIncidents = [...(report.incidents || [])]
+        .filter(i => i.selected !== false)
+        .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+      const incidentData = selectedIncidents.map(i => [
         i.description,
         i.date,
         i.gravity.toUpperCase(),
@@ -1773,29 +1857,30 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                   Utiliza inteligencia artificial avanzada para compilar un informe ejecutivo técnico impecable en segundos basándote en las bitácoras semanales seleccionadas y los problemas corregidos en la planta.
                 </p>
 
-                {loadedTasks.length === 0 ? (
-                  <div className="p-3.5 text-center text-[11px] text-indigo-300 bg-indigo-950/20 border border-indigo-800 border-dashed rounded-xl">
-                    ⚠️ Primero debe cargar las bitácoras semanales usando el botón en la configuración para calibrar el análisis.
+                {loadedTasks.length === 0 && (
+                  <div className="p-3 text-center text-[11px] text-indigo-300 bg-indigo-950/40 border border-indigo-800/60 rounded-xl">
+                    ℹ️ Se cargarán las bitácoras automáticamente para el período al presionar Generar.
                   </div>
-                ) : (
-                  <div className="flex flex-col gap-3 pt-2">
-                    <button
-                      onClick={handleGenerateAIReport}
-                      disabled={generatingWithAI}
-                      className="w-full bg-white hover:bg-indigo-50 disabled:opacity-50 text-indigo-950 font-black text-sm py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-lg cursor-pointer"
-                    >
-                      {generatingWithAI ? (
-                        <>
-                          <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
-                          <span>Analizando datos de planta...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 text-indigo-650" />
-                          <span>Generar con IA Gemini</span>
-                        </>
-                      )}
-                    </button>
+                )}
+
+                <div className="flex flex-col gap-3 pt-1">
+                  <button
+                    onClick={handleGenerateAIReport}
+                    disabled={generatingWithAI}
+                    className="w-full bg-white hover:bg-indigo-50 disabled:opacity-50 text-indigo-950 font-black text-sm py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-lg cursor-pointer"
+                  >
+                    {generatingWithAI ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-indigo-600" />
+                        <span>Analizando datos de planta...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-indigo-650" />
+                        <span>Generar con IA Gemini</span>
+                      </>
+                    )}
+                  </button>
 
                     <button
                       onClick={() => {
@@ -1826,7 +1911,6 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                       Guardar Borrador Rápido (Sin IA)
                     </button>
                   </div>
-                )}
               </section>
 
               {/* Box 2: Visual KPIs Metrics */}

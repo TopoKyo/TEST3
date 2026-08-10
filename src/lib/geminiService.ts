@@ -158,7 +158,7 @@ export const geminiService = {
       });
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: `
             Actúa como un Ingeniero de Obra Senior y Analista de Proyectos. 
             Genera un resumen ejecutivo profesional basado en las siguientes estadísticas de bitácora de obra y el contexto técnico del proyecto:
@@ -278,7 +278,7 @@ export const geminiService = {
       `;
 
       const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+        model: "gemini-3.6-flash",
         contents: prompt,
         config: {
           systemInstruction,
@@ -365,7 +365,7 @@ export const geminiService = {
     `;
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.5-flash",
+      model: "gemini-3.6-flash",
       contents: prompt,
       config: {
         systemInstruction,

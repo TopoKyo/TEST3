@@ -1016,10 +1016,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
               <CardContent className="p-0">
                 <div className="divide-y divide-neutral-100">
                   {lowStockItems.length > 0 ? lowStockItems.map(p => (
-                    <div key={p.id} className="p-4 flex items-center justify-between hover:bg-neutral-50/50 transition-colors">
+                    <div 
+                      key={p.id} 
+                      className="p-4 flex items-center justify-between hover:bg-amber-50/50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setEditingProduct(p);
+                        setProductForm({...p});
+                        setIsProductDialogOpen(true);
+                      }}
+                      title="Haz clic para editar este producto"
+                    >
                       <div>
                         <div className="flex items-center gap-2">
-                          <p className="font-medium text-neutral-900">{p.name}</p>
+                          <p className="font-medium text-neutral-900 group-hover:text-amber-700 transition-colors">{p.name}</p>
                           {isEPPProduct(p) && <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold">EPP</Badge>}
                         </div>
                         <p className="text-xs text-neutral-500 font-mono">ID: {p.id}</p>
@@ -1145,11 +1154,20 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                         const isZero = stock === 0;
 
                         return (
-                          <TableRow key={product.id} className="hover:bg-neutral-50/30 transition-all border-neutral-50 group">
+                          <TableRow 
+                            key={product.id} 
+                            className="hover:bg-indigo-50/40 cursor-pointer transition-all border-neutral-50 group"
+                            onClick={() => {
+                              setEditingProduct(product);
+                              setProductForm({...product});
+                              setIsProductDialogOpen(true);
+                            }}
+                            title="Haz clic para seleccionar y editar este producto"
+                          >
                             <TableCell className="font-mono text-xs font-bold pl-6 text-neutral-500">{product.id}</TableCell>
                             <TableCell className="font-medium text-neutral-900">
                               <div className="flex items-center gap-2">
-                                <span>{product.name}</span>
+                                <span className="group-hover:text-indigo-600 transition-colors font-semibold">{product.name}</span>
                                 {isEPPProduct(product) && <Badge className="bg-amber-100 text-amber-800 text-[10px] font-bold border-none">EPP</Badge>}
                               </div>
                             </TableCell>
@@ -1176,11 +1194,13 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                                   variant="ghost" 
                                   size="icon" 
                                   className="h-8 w-8 rounded-lg text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100"
-                                  onClick={() => {
+                                  onClick={(e) => {
+                                    e.stopPropagation();
                                     setEditingProduct(product);
                                     setProductForm({...product});
                                     setIsProductDialogOpen(true);
                                   }}
+                                  title="Editar producto"
                                 >
                                   <Pencil size={14} />
                                 </Button>
@@ -1188,17 +1208,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                                   variant="ghost" 
                                   size="icon" 
                                   className="h-8 w-8 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50"
-                                  onClick={async () => {
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
                                     if(confirm('¿Seguro que deseas eliminar este producto? Se perderá el historial.')) {
                                       try {
                                         await firestoreService.delete('products', product.id);
-                                      } catch(e) {
+                                      } catch(err) {
                                         await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
                                       }
                                       fetchData();
                                       toast.success('Producto eliminado');
                                     }
                                   }}
+                                  title="Eliminar producto"
                                 >
                                   <Trash2 size={14} />
                                 </Button>
@@ -1409,11 +1431,20 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                           const isZero = stock === 0;
 
                           return (
-                            <TableRow key={product.id} className="hover:bg-amber-50/20 transition-all border-neutral-50 group">
+                            <TableRow 
+                              key={product.id} 
+                              className="hover:bg-amber-100/50 cursor-pointer transition-all border-neutral-50 group"
+                              onClick={() => {
+                                setEditingProduct(product);
+                                setProductForm({...product});
+                                setIsProductDialogOpen(true);
+                              }}
+                              title="Haz clic para seleccionar y editar este elemento de EPP"
+                            >
                               <TableCell className="font-mono text-xs font-bold pl-6 text-amber-900/70">{product.id}</TableCell>
                               <TableCell className="font-medium text-neutral-900">
                                 <div>
-                                  <p className="font-bold text-neutral-900">{product.name}</p>
+                                  <p className="font-bold text-neutral-900 group-hover:text-amber-800 transition-colors">{product.name}</p>
                                   {product.description && <p className="text-xs text-neutral-400 truncate max-w-md">{product.description}</p>}
                                 </div>
                               </TableCell>
@@ -1437,7 +1468,8 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                                   <Button 
                                     size="sm"
                                     className="h-8 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs px-3"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setEppDeliveryForm({
                                         productId: product.id,
                                         quantity: 1,
@@ -1456,11 +1488,13 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-8 w-8 rounded-lg text-neutral-400 hover:text-neutral-900 hover:bg-neutral-100"
-                                    onClick={() => {
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setEditingProduct(product);
                                       setProductForm({...product});
                                       setIsProductDialogOpen(true);
                                     }}
+                                    title="Editar EPP"
                                   >
                                     <Pencil size={14} />
                                   </Button>
@@ -1468,17 +1502,19 @@ export default function InventoryManagement({ users, onUpdate }: InventoryManage
                                     variant="ghost" 
                                     size="icon" 
                                     className="h-8 w-8 rounded-lg text-rose-400 hover:text-rose-600 hover:bg-rose-50"
-                                    onClick={async () => {
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
                                       if(confirm('¿Seguro que deseas eliminar este elemento de EPP?')) {
                                         try {
                                           await firestoreService.delete('products', product.id);
-                                        } catch(e) {
+                                        } catch(err) {
                                           await fetch(`/api/products/${product.id}`, { method: 'DELETE' });
                                         }
                                         fetchData();
                                         toast.success('EPP eliminado');
                                       }
                                     }}
+                                    title="Eliminar EPP"
                                   >
                                     <Trash2 size={14} />
                                   </Button>
