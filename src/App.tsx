@@ -7,7 +7,7 @@ import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Toaster } from '@/components/ui/sonner';
 import { toast } from 'sonner';
-import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw, Award, FileCheck, AlertTriangle, Building2 } from 'lucide-react';
+import { Camera, Users, FileBarChart, Settings, Package, ClipboardList, Mountain, Home as HomeIcon, ChevronLeft, ChevronRight, Menu, Sparkles, RefreshCw, Award, FileCheck, AlertTriangle, Building2, CheckSquare } from 'lucide-react';
 import Scanner from './components/Scanner';
 import UserManagement from './components/UserManagement';
 import AttendanceHistory from './components/AttendanceHistory';
@@ -30,7 +30,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery';
+import ChecklistModule from './components/ChecklistModule';
+import SpdcChecklist from './components/SpdcChecklist';
+
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -90,6 +93,8 @@ export default function App() {
     { id: 'architecture', label: 'Arquitectura', icon: Building2 },
     { id: 'evaluations', label: 'Habilidades Blandas', icon: Award },
     { id: 'skill-reports', label: 'Informes de Personal', icon: FileBarChart },
+    { id: 'checklists', label: 'Checklists', icon: CheckSquare },
+    { id: 'spdc', label: 'Checklist SPDC', icon: ClipboardList },
   ];
 
   useEffect(() => {
@@ -197,6 +202,8 @@ export default function App() {
       case 'evaluations': return <SoftSkillsForm users={users} />;
       case 'skill-reports': return <SoftSkillsReport users={users} />;
       case 'tools-delivery': return <EquipmentDeliverySheet users={users} />;
+      case 'checklists': return <ChecklistModule users={users} />;
+      case 'spdc': return <SpdcChecklist />;
       default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
     }
   };
@@ -257,7 +264,7 @@ export default function App() {
           </AnimatePresence>
         </div>
 
-        <nav className="flex-1 px-4 space-y-2">
+        <nav className="flex-1 overflow-y-auto px-4 space-y-2 pb-4">
           {menuItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeView === item.id;

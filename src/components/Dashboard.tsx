@@ -70,6 +70,22 @@ export default function Dashboard({ onNavigate, movements, workLogs, wishlistIte
       textColor: 'text-red-600' 
     },
     { 
+      id: 'checklists', 
+      label: 'Checklists', 
+      description: 'Gestionar listas de verificación',
+      icon: ClipboardList, 
+      color: 'bg-indigo-600', 
+      textColor: 'text-indigo-600' 
+    },
+    { 
+      id: 'spdc', 
+      label: 'Checklist SPDC', 
+      description: 'Verificación de equipos de protección contra caídas',
+      icon: ClipboardList, 
+      color: 'bg-cyan-600', 
+      textColor: 'text-cyan-600' 
+    },
+    { 
       id: 'report', 
       label: 'Reporte Consolidado', 
       description: 'Análisis inteligente del avance semanal/mensual',
