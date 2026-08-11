@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Printer, Save } from 'lucide-react';
+import { Printer, Save, Loader2 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+
 import { cn } from '@/lib/utils';
+import domtoimage from 'dom-to-image';
+import { jsPDF } from 'jspdf';
 
 type ValueType = 'SI' | 'NO' | null;
 
@@ -79,6 +81,8 @@ export default function SpdcChecklist() {
     fecha: new Date().toISOString().split('T')[0]
   });
 
+  const [isExporting, setIsExporting] = useState(false);
+
   const handleRowChange = (sectionId: string, rowId: string, field: 'value' | 'obs', newValue: any) => {
     setSections(prev => prev.map(sec => {
       if (sec.id === sectionId) {
@@ -97,27 +101,45 @@ export default function SpdcChecklist() {
   };
 
   const handlePrint = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
     try {
-      // Import dynamically to avoid SSR issues if this were Next.js, and to keep initial bundle small
-      const html2canvas = (await import('html2canvas')).default;
-      const { jsPDF } = await import('jspdf');
-      
       const element = document.getElementById('checklist-content');
       if (!element) return;
       
-      // Add a class temporarily for PDF generation if needed to hide UI elements
+      const originalWidth = element.style.width;
+      const originalMaxWidth = element.style.maxWidth;
+      const originalMargin = element.style.margin;
+      
+      element.style.width = '1000px';
+      element.style.maxWidth = '1000px';
+      element.style.margin = '0 auto';
       element.classList.add('pdf-mode');
       
-      const canvas = await html2canvas(element, {
-        scale: 2, // Higher resolution
-        useCORS: true,
-        logging: false,
-        backgroundColor: '#ffffff'
+      // Wait a tick for layout changes to apply
+      await new Promise(resolve => setTimeout(resolve, 50));
+      
+      const scale = 2;
+      const targetWidth = 1000;
+      const targetHeight = element.scrollHeight;
+      
+      const imgData = await domtoimage.toPng(element, {
+        bgcolor: '#ffffff',
+        width: targetWidth * scale,
+        height: targetHeight * scale,
+        style: {
+          transform: `scale(${scale})`,
+          transformOrigin: 'top left',
+          width: `${targetWidth}px`,
+          height: `${targetHeight}px`
+        }
       });
       
+      element.style.width = originalWidth;
+      element.style.maxWidth = originalMaxWidth;
+      element.style.margin = originalMargin;
       element.classList.remove('pdf-mode');
       
-      const imgData = canvas.toDataURL('image/png');
       const pdf = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
@@ -125,12 +147,11 @@ export default function SpdcChecklist() {
       });
       
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = (targetHeight * pdfWidth) / targetWidth;
       
-      // A4 is 210x297mm. If height > 297mm, we might need multiple pages, but for this checklist we'll scale it to fit or let it span
       let heightLeft = pdfHeight;
       let position = 0;
-      const pageHeight = 295; // slightly less than 297 to allow margins
+      const pageHeight = 295; 
       
       pdf.addImage(imgData, 'PNG', 0, position, pdfWidth, pdfHeight);
       heightLeft -= pageHeight;
@@ -145,8 +166,9 @@ export default function SpdcChecklist() {
       pdf.save(`Checklist_SPDC_${headerData.obra || 'Vertical'}_${headerData.fecha}.pdf`);
     } catch (error) {
       console.error("Error generating PDF:", error);
-      // Fallback to window.print() if canvas fails
       window.print();
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -154,57 +176,65 @@ export default function SpdcChecklist() {
     <div className="max-w-[1000px] mx-auto pb-12 print:pb-0 print:max-w-none print:w-full">
       <div className="flex justify-between items-center mb-6 print:hidden">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-neutral-900">Checklist SPDC</h1>
-          <p className="text-neutral-500 mt-1">Verificación de Sistemas Personales de Detención de Caídas</p>
+          <h1 className="text-3xl font-bold tracking-tight text-[#171717]">Checklist SPDC</h1>
+          <p className="text-[#737373] mt-1">Verificación de Sistemas Personales de Detención de Caídas</p>
         </div>
-        <Button onClick={handlePrint} className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm">
-          <Printer size={18} className="mr-2" />
-          Exportar a PDF
+        <Button 
+          onClick={handlePrint} 
+          disabled={isExporting}
+          className="bg-indigo-600 hover:bg-indigo-700 text-[#ffffff] rounded-xl shadow-sm"
+        >
+          {isExporting ? (
+            <Loader2 size={18} className="mr-2 animate-spin" />
+          ) : (
+            <Printer size={18} className="mr-2" />
+          )}
+          {isExporting ? 'Generando PDF...' : 'Exportar a PDF'}
         </Button>
       </div>
 
-      <Card className="border-neutral-200 shadow-sm bg-white overflow-hidden print:shadow-none print:border-none">
+      <Card className="border-[#e5e5e5] shadow-sm bg-[#ffffff] overflow-hidden print:shadow-none print:border-none">
         <CardContent id="checklist-content" className="p-8 print:p-0">
           {/* Form Header matching the image exactly */}
           <div className="text-center mb-8">
             <h2 className="text-xl font-bold text-[#1a365d] uppercase">CHECK LIST: VERIFICACIÓN DE SISTEMAS PERSONALES DE DETENCIÓN DE CAÍDAS (SPDC)</h2>
-            <p className="text-sm text-neutral-600 mt-1">Documentación técnica, certificación y trazabilidad de equipos de protección contra caídas</p>
-            <p className="text-sm text-neutral-500">Ley 16.744 ~ DS44 | Reglamento de Trabajo en Altura Físico</p>
+            <p className="text-sm text-[#525252] mt-1">Documentación técnica, certificación y trazabilidad de equipos de protección contra caídas</p>
+            <p className="text-sm text-[#737373]">Ley 16.744 ~ DS44 | Reglamento de Trabajo en Altura Físico</p>
           </div>
 
-          <div className="border border-black mb-6 w-full text-sm">
-            <div className="flex border-b border-black">
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50">CÓD. INTERNO</div>
-              <div className="w-1/4 border-r border-black p-2">VS-CL-SPDC-2026-001</div>
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50">VERSIÓN</div>
+          <div className="border border-[#000000] mb-6 w-full text-sm">
+            <div className="flex border-b border-[#000000]">
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa]">CÓD. INTERNO</div>
+              <div className="w-1/4 border-r border-[#000000] p-2">VS-CL-SPDC-2026-001</div>
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa]">VERSIÓN</div>
               <div className="w-1/4 p-2">1.0</div>
             </div>
-            <div className="flex border-b border-black">
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50">FECHA ELAB.</div>
-              <div className="w-1/4 border-r border-black p-2">
-                <Input 
+            <div className="flex border-b border-[#000000]">
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa]">FECHA ELAB.</div>
+              <div className="w-1/4 border-r border-[#000000] p-2">
+                <input 
                   type="date" 
                   value={headerData.fecha}
                   onChange={(e) => setHeaderData({...headerData, fecha: e.target.value})}
                   className="h-6 p-0 border-none rounded-none focus-visible:ring-0 shadow-none text-sm w-full bg-transparent"
                 />
               </div>
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50">ESTADO</div>
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa]">ESTADO</div>
               <div className="w-1/4 p-2">APTO PARA USO EN TERRENO</div>
             </div>
             <div className="flex">
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50 flex items-center">OBRA / PROYECTO</div>
-              <div className="w-1/4 border-r border-black p-1">
-                <Input 
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa] flex items-center">OBRA / PROYECTO</div>
+              <div className="w-1/4 border-r border-[#000000] p-1">
+                <input 
                   value={headerData.obra}
                   onChange={(e) => setHeaderData({...headerData, obra: e.target.value})}
                   className="h-8 border-none rounded-none focus-visible:ring-0 shadow-none text-sm w-full bg-transparent"
                   placeholder="Ingrese obra..."
                 />
               </div>
-              <div className="w-1/4 border-r border-black font-bold p-2 bg-neutral-50 flex items-center">RESPONSABLE DE VERIFICACIÓN</div>
+              <div className="w-1/4 border-r border-[#000000] font-bold p-2 bg-[#fafafa] flex items-center">RESPONSABLE DE VERIFICACIÓN</div>
               <div className="w-1/4 p-1">
-                <Input 
+                <input 
                   value={headerData.responsable}
                   onChange={(e) => setHeaderData({...headerData, responsable: e.target.value})}
                   className="h-8 border-none rounded-none focus-visible:ring-0 shadow-none text-sm w-full bg-transparent"
@@ -224,40 +254,40 @@ export default function SpdcChecklist() {
           <div className="space-y-8">
             {sections.map(section => (
               <div key={section.id} className="print:break-inside-avoid">
-                <div className="inline-block bg-[#c00000] text-white font-bold px-3 py-1 mb-2 border border-black text-sm">
+                <div className="inline-block bg-[#c00000] text-[#ffffff] font-bold px-3 py-1 mb-2 border border-[#000000] text-sm">
                   {section.title}
                 </div>
-                <table className="w-full border-collapse border border-black text-sm">
+                <table className="w-full border-collapse border border-[#000000] text-sm">
                   <thead>
-                    <tr className="bg-[#1a365d] text-white">
-                      <th className="border border-black p-2 text-left w-[25%]">Ítem de verificación</th>
-                      <th className="border border-black p-2 text-left w-[45%]">Qué se verifica</th>
-                      <th className="border border-black p-2 text-center w-[5%]">SI</th>
-                      <th className="border border-black p-2 text-center w-[5%]">NO</th>
-                      <th className="border border-black p-2 text-center w-[20%] leading-tight">N° Serie /<br/>Obs.</th>
+                    <tr className="bg-[#1a365d] text-[#ffffff]">
+                      <th className="border border-[#000000] p-2 text-left w-[25%]">Ítem de verificación</th>
+                      <th className="border border-[#000000] p-2 text-left w-[45%]">Qué se verifica</th>
+                      <th className="border border-[#000000] p-2 text-center w-[5%]">SI</th>
+                      <th className="border border-[#000000] p-2 text-center w-[5%]">NO</th>
+                      <th className="border border-[#000000] p-2 text-center w-[20%] leading-tight">N° Serie /<br/>Obs.</th>
                     </tr>
                   </thead>
                   <tbody>
                     {section.rows.map(row => (
                       <tr key={row.id}>
-                        <td className="border border-black p-2 font-medium">{row.item}</td>
-                        <td className="border border-black p-2 text-xs">{row.description}</td>
-                        <td className="border border-black p-0 text-center align-middle cursor-pointer" onClick={() => handleRowChange(section.id, row.id, 'value', 'SI')}>
+                        <td className="border border-[#000000] p-2 font-medium">{row.item}</td>
+                        <td className="border border-[#000000] p-2 text-xs">{row.description}</td>
+                        <td className="border border-[#000000] p-0 text-center align-middle cursor-pointer" onClick={() => handleRowChange(section.id, row.id, 'value', 'SI')}>
                           <div className="flex justify-center items-center h-full w-full p-2">
-                            <div className={cn("w-4 h-4 border border-black flex items-center justify-center", row.value === 'SI' && "bg-black text-white font-bold")}>
+                            <div className={cn("w-4 h-4 border border-[#000000] flex items-center justify-center", row.value === 'SI' && "bg-[#000000] text-[#ffffff] font-bold")}>
                               {row.value === 'SI' && "X"}
                             </div>
                           </div>
                         </td>
-                        <td className="border border-black p-0 text-center align-middle cursor-pointer" onClick={() => handleRowChange(section.id, row.id, 'value', 'NO')}>
+                        <td className="border border-[#000000] p-0 text-center align-middle cursor-pointer" onClick={() => handleRowChange(section.id, row.id, 'value', 'NO')}>
                           <div className="flex justify-center items-center h-full w-full p-2">
-                            <div className={cn("w-4 h-4 border border-black flex items-center justify-center", row.value === 'NO' && "bg-black text-white font-bold")}>
+                            <div className={cn("w-4 h-4 border border-[#000000] flex items-center justify-center", row.value === 'NO' && "bg-[#000000] text-[#ffffff] font-bold")}>
                               {row.value === 'NO' && "X"}
                             </div>
                           </div>
                         </td>
-                        <td className="border border-black p-0">
-                          <Input 
+                        <td className="border border-[#000000] p-0">
+                          <input 
                             value={row.obs}
                             onChange={(e) => handleRowChange(section.id, row.id, 'obs', e.target.value)}
                             className="h-full min-h-[40px] border-none rounded-none focus-visible:ring-0 shadow-none text-xs w-full bg-transparent px-2"
@@ -273,31 +303,31 @@ export default function SpdcChecklist() {
 
           <div className="mt-12 print:break-inside-avoid">
             <h3 className="text-lg font-bold text-[#1a365d] uppercase mb-2 border-b-2 border-[#1a365d] inline-block">CONTROL DE VERIFICACIÓN</h3>
-            <table className="w-full border-collapse border border-black text-sm mt-4">
+            <table className="w-full border-collapse border border-[#000000] text-sm mt-4">
               <thead>
-                <tr className="bg-neutral-100">
-                  <th className="border border-black p-2 text-center w-1/3">Verificó (Prevención / Supervisor)</th>
-                  <th className="border border-black p-2 text-center w-1/3">Revisó y aprobó (Rep. Legal)</th>
-                  <th className="border border-black p-2 text-center w-1/3">Recibió (Mandante)</th>
+                <tr className="bg-[#f5f5f5]">
+                  <th className="border border-[#000000] p-2 text-center w-1/3">Verificó (Prevención / Supervisor)</th>
+                  <th className="border border-[#000000] p-2 text-center w-1/3">Revisó y aprobó (Rep. Legal)</th>
+                  <th className="border border-[#000000] p-2 text-center w-1/3">Recibió (Mandante)</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="border border-black h-24 p-2 relative">
-                    <span className="absolute bottom-1 left-2 text-[10px] text-neutral-400">Firma</span>
+                  <td className="border border-[#000000] h-24 p-2 relative">
+                    <span className="absolute bottom-1 left-2 text-[10px] text-[#a3a3a3]">Firma</span>
                   </td>
-                  <td className="border border-black h-24 p-2 relative">
-                    <span className="absolute bottom-1 left-2 text-[10px] text-neutral-400">Firma</span>
+                  <td className="border border-[#000000] h-24 p-2 relative">
+                    <span className="absolute bottom-1 left-2 text-[10px] text-[#a3a3a3]">Firma</span>
                   </td>
-                  <td className="border border-black h-24 p-2 relative">
-                    <span className="absolute bottom-1 left-2 text-[10px] text-neutral-400">Firma</span>
+                  <td className="border border-[#000000] h-24 p-2 relative">
+                    <span className="absolute bottom-1 left-2 text-[10px] text-[#a3a3a3]">Firma</span>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
-          <div className="mt-8 flex justify-between items-center text-[10px] font-bold text-neutral-600 print:block">
+          <div className="mt-8 flex justify-between items-center text-[10px] font-bold text-[#525252] print:block">
             <div className="uppercase">VERTICAL SOLUCIONES SPA | RUT: 76.864.184-6</div>
             <div className="print:text-right print:mt-[-15px]">Página 1 de 1</div>
           </div>

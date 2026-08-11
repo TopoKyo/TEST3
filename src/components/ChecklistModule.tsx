@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { firestoreService } from '../lib/firestoreService';
 import { cn } from '@/lib/utils';
-import { User } from '@/types';
+import { User } from '../types';
 import { toast } from 'sonner';
 
 export interface ChecklistItem {
@@ -81,7 +81,7 @@ export default function ChecklistModule({ users }: ChecklistModuleProps) {
       return;
     }
 
-    const newChecklist = {
+    const newChecklist = { id: crypto.randomUUID(),
       title: newTitle.trim(),
       description: newDescription.trim(),
       items: [],

@@ -32,8 +32,10 @@ import { Button } from '@/components/ui/button';
 
 import ChecklistModule from './components/ChecklistModule';
 import SpdcChecklist from './components/SpdcChecklist';
+import WarningModule from './components/WarningModule';
+import ObligationsAuditModule from './components/ObligationsAuditModule';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc' | 'warnings' | 'obligations';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -95,6 +97,8 @@ export default function App() {
     { id: 'skill-reports', label: 'Informes de Personal', icon: FileBarChart },
     { id: 'checklists', label: 'Checklists', icon: CheckSquare },
     { id: 'spdc', label: 'Checklist SPDC', icon: ClipboardList },
+    { id: 'warnings', label: 'Amonestaciones', icon: AlertTriangle },
+    { id: 'obligations', label: 'Cumplimiento Diario', icon: CheckSquare },
   ];
 
   useEffect(() => {
@@ -204,7 +208,9 @@ export default function App() {
       case 'tools-delivery': return <EquipmentDeliverySheet users={users} />;
       case 'checklists': return <ChecklistModule users={users} />;
       case 'spdc': return <SpdcChecklist />;
-      default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} />;
+      case 'warnings': return <WarningModule users={users} />;
+      case 'obligations': return <ObligationsAuditModule users={users} />;
+      default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} wishlistItems={wishlistItems} />;
     }
   };
 
@@ -232,7 +238,7 @@ export default function App() {
         }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
         className={cn(
-          "fixed inset-y-0 left-0 z-[70] md:relative h-full bg-white border-r border-neutral-200 flex flex-col shadow-xl md:shadow-sm",
+          "fixed inset-y-0 left-0 z-[70] md:relative h-full bg-white border-r border-neutral-200 flex flex-col shadow-xl md:shadow-sm print:hidden",
           (!isDesktop && !isMobileMenuOpen) && "pointer-events-none"
         )}
       >
@@ -311,8 +317,8 @@ export default function App() {
       </motion.aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto relative w-full">
-        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200 px-6 md:px-8 py-4 flex items-center justify-between">
+      <main className="flex-1 overflow-y-auto relative w-full print:overflow-visible">
+        <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-neutral-200 px-6 md:px-8 py-4 flex items-center justify-between print:hidden">
           <div className="flex items-center gap-4">
             <Button variant="outline" size="icon" className="rounded-xl flex md:hidden h-10 w-10 shrink-0" onClick={() => setIsMobileMenuOpen(true)}>
               <Menu size={20} />
@@ -341,7 +347,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="p-4 md:p-8">
+        <div className="p-4 md:p-8 print:p-0">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeView}

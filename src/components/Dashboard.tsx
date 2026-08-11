@@ -18,6 +18,8 @@ import {
   Clock,
   AlertCircle,
   AlertOctagon,
+  AlertTriangle,
+  CheckSquare,
   Sparkles as SparklesIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -84,6 +86,22 @@ export default function Dashboard({ onNavigate, movements, workLogs, wishlistIte
       icon: ClipboardList, 
       color: 'bg-cyan-600', 
       textColor: 'text-cyan-600' 
+    },
+    { 
+      id: 'warnings', 
+      label: 'Amonestaciones', 
+      description: 'Registro de faltas e incidencias de personal',
+      icon: AlertTriangle, 
+      color: 'bg-red-500', 
+      textColor: 'text-red-500' 
+    },
+    { 
+      id: 'obligations', 
+      label: 'Cumplimiento Diario', 
+      description: 'Fiscalización de tareas por cargo',
+      icon: CheckSquare, 
+      color: 'bg-teal-500', 
+      textColor: 'text-teal-500' 
     },
     { 
       id: 'report', 
