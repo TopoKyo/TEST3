@@ -9,6 +9,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { toast } from 'sonner';
 import { 
+  ArrowUp,
+  ArrowDown,
   FileText, 
   Plus, 
   Trash2, 
@@ -699,6 +701,47 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     setCurrentLog({ ...currentLog, [section]: items });
   };
 
+  const moveItem = (section: string, id: string, direction: 'up' | 'down') => {
+    if (!currentLog) return;
+    const allItems = [...(currentLog as any)[section]];
+    const index = allItems.findIndex((i: any) => i.id === id);
+    if (index === -1) return;
+
+    if (section === 'activities') {
+      const activity = allItems[index];
+      const periodMatches = (a: any) => activity.period === 'morning' || !activity.period 
+        ? a.period === 'morning' || !a.period 
+        : a.period === activity.period;
+      
+      const periodItems = allItems.filter(periodMatches);
+      const periodIndex = periodItems.findIndex((a: any) => a.id === id);
+
+      if (direction === 'up' && periodIndex > 0) {
+        const prevId = periodItems[periodIndex - 1].id;
+        const prevIndex = allItems.findIndex((a: any) => a.id === prevId);
+        [allItems[index], allItems[prevIndex]] = [allItems[prevIndex], allItems[index]];
+      } else if (direction === 'down' && periodIndex < periodItems.length - 1) {
+        const nextId = periodItems[periodIndex + 1].id;
+        const nextIndex = allItems.findIndex((a: any) => a.id === nextId);
+        [allItems[index], allItems[nextIndex]] = [allItems[nextIndex], allItems[index]];
+      }
+
+      let counter = 1;
+      for (const a of allItems) {
+        if (periodMatches(a)) {
+          a.item = counter++;
+        }
+      }
+    } else {
+      if (direction === 'up' && index > 0) {
+        [allItems[index], allItems[index - 1]] = [allItems[index - 1], allItems[index]];
+      } else if (direction === 'down' && index < allItems.length - 1) {
+        [allItems[index], allItems[index + 1]] = [allItems[index + 1], allItems[index]];
+      }
+    }
+    setCurrentLog({ ...currentLog, [section]: allItems });
+  };
+
   const removeItem = (section: string, id: string) => {
     if (!currentLog) return;
     const items = (currentLog as any)[section].filter((i: any) => i.id !== id);
@@ -1371,7 +1414,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                         <TableHead className="w-[80px]">Lado</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-[80px]">Foto</TableHead>
-                        {isEditing && <TableHead className="w-[50px]"></TableHead>}
+                        {isEditing && <TableHead className="w-[120px]"></TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1504,9 +1547,17 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                           </TableCell>
                           {isEditing && (
                             <TableCell>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 rounded-lg" onClick={() => removeItem('activities', a.id)}>
-                                <Trash2 size={14} />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-indigo-600 rounded-lg" onClick={() => moveItem('activities', a.id, 'up')}>
+                                  <ArrowUp size={14} />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-indigo-600 rounded-lg" onClick={() => moveItem('activities', a.id, 'down')}>
+                                  <ArrowDown size={14} />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0" onClick={() => removeItem('activities', a.id)}>
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>
@@ -1529,7 +1580,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                         <TableHead className="w-[80px]">Lado</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="w-[80px]">Foto</TableHead>
-                        {isEditing && <TableHead className="w-[50px]"></TableHead>}
+                        {isEditing && <TableHead className="w-[120px]"></TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1662,9 +1713,17 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                           </TableCell>
                           {isEditing && (
                             <TableCell>
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 rounded-lg" onClick={() => removeItem('activities', a.id)}>
-                                <Trash2 size={14} />
-                              </Button>
+                              <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-indigo-600 rounded-lg" onClick={() => moveItem('activities', a.id, 'up')}>
+                                  <ArrowUp size={14} />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-500 hover:text-indigo-600 rounded-lg" onClick={() => moveItem('activities', a.id, 'down')}>
+                                  <ArrowDown size={14} />
+                                </Button>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0" onClick={() => removeItem('activities', a.id)}>
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
                             </TableCell>
                           )}
                         </TableRow>

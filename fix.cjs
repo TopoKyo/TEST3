@@ -1,10 +1,6 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/components/DailyLog.tsx', 'utf-8');
 
-if (!code.includes('ArrowUp')) {
-  code = code.replace("import { ", "import { ArrowUp, ArrowDown, ");
-}
-
 const moveItemFunc = `  const moveItem = (section: string, id: string, direction: 'up' | 'down') => {
     if (!currentLog) return;
     const allItems = [...(currentLog as any)[section]];
@@ -46,8 +42,8 @@ const moveItemFunc = `  const moveItem = (section: string, id: string, direction
     setCurrentLog({ ...currentLog, [section]: allItems });
   };`;
 
-if (!code.includes('moveItem(')) {
-  code = code.replace("const removeItem =", moveItemFunc + "\n\n  const removeItem =");
+if (!code.includes("const moveItem = ")) {
+  code = code.replace("  const removeItem = ", moveItemFunc + "\n\n  const removeItem = ");
 }
 
 fs.writeFileSync('src/components/DailyLog.tsx', code);

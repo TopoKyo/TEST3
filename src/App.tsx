@@ -34,8 +34,9 @@ import ChecklistModule from './components/ChecklistModule';
 import SpdcChecklist from './components/SpdcChecklist';
 import WarningModule from './components/WarningModule';
 import ObligationsAuditModule from './components/ObligationsAuditModule';
+import DailyBriefingModule from './components/DailyBriefingModule';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc' | 'warnings' | 'obligations';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc' | 'warnings' | 'obligations' | 'briefing';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -99,6 +100,7 @@ export default function App() {
     { id: 'spdc', label: 'Checklist SPDC', icon: ClipboardList },
     { id: 'warnings', label: 'Amonestaciones', icon: AlertTriangle },
     { id: 'obligations', label: 'Cumplimiento Diario', icon: CheckSquare },
+    { id: 'briefing', label: 'Charla Diaria', icon: ClipboardList },
   ];
 
   useEffect(() => {
@@ -210,6 +212,7 @@ export default function App() {
       case 'spdc': return <SpdcChecklist />;
       case 'warnings': return <WarningModule users={users} />;
       case 'obligations': return <ObligationsAuditModule users={users} />;
+      case 'briefing': return <DailyBriefingModule users={users} />;
       default: return <Dashboard onNavigate={(view) => setActiveView(view as View)} movements={movements} workLogs={workLogs} wishlistItems={wishlistItems} />;
     }
   };

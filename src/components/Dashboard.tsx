@@ -104,6 +104,14 @@ export default function Dashboard({ onNavigate, movements, workLogs, wishlistIte
       textColor: 'text-teal-500' 
     },
     { 
+      id: 'briefing', 
+      label: 'Charla Diaria', 
+      description: 'Registro de charla de seguridad',
+      icon: ClipboardList, 
+      color: 'bg-indigo-500', 
+      textColor: 'text-indigo-500' 
+    },
+    { 
       id: 'report', 
       label: 'Reporte Consolidado', 
       description: 'Análisis inteligente del avance semanal/mensual',
