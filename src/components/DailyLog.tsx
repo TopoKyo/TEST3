@@ -282,7 +282,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       
       try {
-        const compressed = await compressImage(dataUrl, 800, 0.6);
+        const compressed = await compressImage(dataUrl, 400, 0.4);
         if (activeActivityId) updateItem('activities', activeActivityId, 'image', compressed);
         else if (activeProblemId) updateItem('problems', activeProblemId, 'image', compressed);
         else if (activeSafetyTicketId) updateSafetyTicket(activeSafetyTicketId, 'image', compressed);
@@ -357,7 +357,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       try {
-        const compressed = await compressImage(base64, 800, 0.6);
+        const compressed = await compressImage(base64, 400, 0.4);
         updateSafetyTicket(id, 'image', compressed);
       } catch (e) {
         updateSafetyTicket(id, 'image', base64);
@@ -495,7 +495,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       try {
-        const compressed = await compressImage(base64, 800, 0.6);
+        const compressed = await compressImage(base64, 400, 0.4);
         updateEppInspection(id, 'image', compressed);
       } catch (e) {
         updateEppInspection(id, 'image', base64);
@@ -761,7 +761,7 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       try {
-        const compressed = await compressImage(base64, 800, 0.6);
+        const compressed = await compressImage(base64, 400, 0.4);
         updateItem('activities', id, 'image', compressed);
       } catch (e) {
         updateItem('activities', id, 'image', base64);
@@ -775,13 +775,44 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
     reader.onloadend = async () => {
       const base64 = reader.result as string;
       try {
-        const compressed = await compressImage(base64, 800, 0.6);
+        const compressed = await compressImage(base64, 400, 0.4);
         updateItem('problems', id, 'image', compressed);
       } catch (e) {
         updateItem('problems', id, 'image', base64);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleGlobalPhoto = async (files: FileList) => {
+    if (!currentLog) return;
+    const currentPhotos = currentLog.photos || [];
+    if (currentPhotos.length + files.length > 40) {
+      toast.error('El límite es de 40 fotos en la bitácora.');
+      return;
+    }
+
+    const newPhotos = [...currentPhotos];
+    
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (newPhotos.length >= 40) break;
+      
+      try {
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+        const compressed = await compressImage(base64, 300, 0.4);
+        newPhotos.push(compressed);
+      } catch (e) {
+        console.error('Error procesando imagen global', e);
+      }
+    }
+    
+    setCurrentLog(prev => prev ? { ...prev, photos: newPhotos } : null);
+    toast.success(`Se agregaron ${files.length} foto(s) a la bitácora.`);
   };
 
   const getBase64ImageFromURL = (url: string) => {
@@ -1108,6 +1139,40 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
       }
     });
     
+    // Anexos Fotográficos Generales
+    if (currentLog.photos && currentLog.photos.length > 0) {
+      doc.addPage();
+      doc.setFontSize(14);
+      doc.setTextColor(40, 40, 40);
+      doc.text('ANEXO FOTOGRÁFICO GENERAL', 15, 20);
+      
+      let currentY = 30;
+      let currentX = 15;
+      const imgWidth = 80;
+      const imgHeight = 60;
+      const margin = 10;
+      
+      currentLog.photos.forEach((photo, index) => {
+        if (currentY + imgHeight > 280) {
+          doc.addPage();
+          currentY = 20;
+          currentX = 15;
+        }
+        
+        try {
+          doc.addImage(photo, 'JPEG', currentX, currentY, imgWidth, imgHeight);
+        } catch (e) {
+          console.error('Error drawing global photo', e);
+        }
+        
+        currentX += imgWidth + margin;
+        if (currentX + imgWidth > 200) {
+          currentX = 15;
+          currentY += imgHeight + margin;
+        }
+      });
+    }
+
     doc.save(`Bitacora_${currentLog.date}.pdf`);
   };
 
@@ -1847,6 +1912,67 @@ export default function DailyLog({ users, attendanceLogs }: DailyLogProps) {
                     </div>
                  </LogSection>
               </div>
+
+              {/* Registro Fotográfico General */}
+              <LogSection title="Registro Fotográfico General" icon={<ImageIcon />} isEditing={isEditing}>
+                 <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-neutral-500">
+                        Puedes adjuntar hasta un máximo de 20 fotografías a la bitácora diaria. 
+                        ({currentLog?.photos?.length || 0} / 20)
+                      </p>
+                      {isEditing && (
+                        <div className="relative group/upload shrink-0">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files.length > 0) {
+                                handleGlobalPhoto(e.target.files);
+                                e.target.value = '';
+                              }
+                            }}
+                          />
+                          <Button type="button" variant="outline" size="sm" className="gap-1 rounded-xl bg-white text-emerald-700 border-emerald-200 hover:bg-emerald-50 pointer-events-none">
+                            <Upload size={16} /> Agregar Fotos
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {currentLog?.photos && currentLog.photos.length > 0 ? (
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                        {currentLog.photos.map((photo, i) => (
+                           <div key={i} className="relative group/photo aspect-square rounded-xl overflow-hidden border border-neutral-200 shadow-sm bg-neutral-100">
+                              <img src={photo} alt={`Registro ${i + 1}`} className="w-full h-full object-cover cursor-pointer hover:opacity-80 transition-opacity" onClick={() => window.open(photo, '_blank')} />
+                              {isEditing && (
+                                <button 
+                                  title="Eliminar foto"
+                                  type="button"
+                                  className="absolute top-2 right-2 bg-rose-500 text-white rounded-full p-1 opacity-0 group-hover/photo:opacity-100 transition-opacity z-10 hover:bg-rose-600 shadow-md"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const newPhotos = [...(currentLog.photos || [])];
+                                    newPhotos.splice(i, 1);
+                                    setCurrentLog({ ...currentLog, photos: newPhotos });
+                                  }}
+                                >
+                                  <X size={14} />
+                                </button>
+                              )}
+                           </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 px-4 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200">
+                         <ImageIcon size={32} className="mx-auto text-neutral-300 mb-2" />
+                         <p className="text-sm font-medium text-neutral-500">No hay fotos en el registro general</p>
+                      </div>
+                    )}
+                 </div>
+              </LogSection>
 
               {/* Section 8: Observaciones Generales */}
               <LogSection title="Observaciones Generales" icon={<FileText />} isEditing={isEditing}>

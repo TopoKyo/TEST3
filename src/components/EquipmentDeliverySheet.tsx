@@ -43,7 +43,7 @@ function ToolSelector({ value, onChange, products }: { value: string; onChange: 
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger render={
         <Button variant="outline" className="w-full justify-start h-auto min-h-[36px] px-3 py-2 text-left font-normal border-neutral-200 bg-white hover:bg-neutral-50/50">
           <div className="flex flex-wrap gap-1">
             {selectedTools.length > 0 ? (
@@ -57,7 +57,7 @@ function ToolSelector({ value, onChange, products }: { value: string; onChange: 
             )}
           </div>
         </Button>
-      </PopoverTrigger>
+      } />
       <PopoverContent className="w-[300px] p-0" align="start">
         <Command>
           <CommandInput placeholder="Buscar herramienta en inventario..." />

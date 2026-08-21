@@ -397,3 +397,27 @@ export interface ArchReport {
   updatedAt: string;
 }
 
+export interface IncidentReportPhoto {
+  id: string;
+  url: string;
+  description: string;
+}
+
+export interface IncidentReport {
+  id: string;
+  projectId: string;
+  projectName: string;
+  date: string;
+  time: string;
+  reporter: string;
+  area: string;
+  location: string;
+  description: string;
+  severity: 'Baja' | 'Media' | 'Alta' | 'Crítica';
+  type: 'Seguridad' | 'Calidad' | 'Medio Ambiente' | 'Operacional' | 'Otro';
+  immediateAction: string;
+  photos: IncidentReportPhoto[];
+  status: 'Abierto' | 'En proceso' | 'Resuelto' | 'Cerrado';
+  createdAt: string;
+  updatedAt: string;
+}

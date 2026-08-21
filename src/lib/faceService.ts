@@ -1,6 +1,6 @@
 import * as faceapi from 'face-api.js';
 
-const MODEL_URL = 'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights';
+const MODEL_URL = '/models';
 
 class FaceService {
   private isLoaded = false;

@@ -35,8 +35,9 @@ import SpdcChecklist from './components/SpdcChecklist';
 import WarningModule from './components/WarningModule';
 import ObligationsAuditModule from './components/ObligationsAuditModule';
 import DailyBriefingModule from './components/DailyBriefingModule';
+import IncidentReportModule from './components/IncidentReportModule';
 
-type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc' | 'warnings' | 'obligations' | 'briefing';
+type View = 'home' | 'scanner' | 'users' | 'history' | 'inventory' | 'worklogs' | 'wishlist' | 'evaluations' | 'skill-reports' | 'weekly-report' | 'exceptional' | 'architecture' | 'tools-delivery' | 'checklists' | 'spdc' | 'warnings' | 'obligations' | 'briefing' | 'incident-reports';
 
 export default function App() {
   const [activeView, setActiveView] = useState<View>('home');
@@ -93,6 +94,7 @@ export default function App() {
     { id: 'worklogs', label: 'Bitácora de Obra', icon: ClipboardList },
     { id: 'weekly-report', label: 'Informe Semanal', icon: FileCheck },
     { id: 'exceptional', label: 'Informe Excepcional', icon: AlertTriangle },
+    { id: 'incident-reports', label: 'Reporte Incidencias', icon: AlertTriangle },
     { id: 'architecture', label: 'Arquitectura', icon: Building2 },
     { id: 'evaluations', label: 'Habilidades Blandas', icon: Award },
     { id: 'skill-reports', label: 'Informes de Personal', icon: FileBarChart },
@@ -203,6 +205,7 @@ export default function App() {
       case 'worklogs': return <DailyLog users={users} attendanceLogs={logs} />;
       case 'weekly-report': return <WeeklyReportModule users={users} workLogs={workLogs} onReportSaved={refreshData} />;
       case 'exceptional': return <ExceptionalReportModule users={users} />;
+      case 'incident-reports': return <IncidentReportModule />;
       case 'architecture': return <ArchitectureReports />;
       case 'wishlist': return <WishList users={users} />;
       case 'evaluations': return <SoftSkillsForm users={users} />;

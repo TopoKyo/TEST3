@@ -137,10 +137,18 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     const today = new Date();
     const day = today.getDay();
     const diffToMonday = today.getDate() - day + (day === 0 ? -6 : 1);
-    const monday = new Date(today.setDate(diffToMonday));
-    const sunday = new Date(today.setDate(monday.getDate() + 6));
+    const monday = new Date(today);
+    monday.setDate(diffToMonday);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
     
-    const fmtDate = (d: Date) => d.toISOString().split('T')[0];
+    const fmtDate = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const date = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${date}`;
+    };
+
     setStartDate(fmtDate(monday));
     setEndDate(fmtDate(sunday));
 
@@ -149,6 +157,170 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     const months = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
     setWeekLabel(`Semana ${weekNum} - ${months[monday.getMonth()]} ${monday.getFullYear()}`);
   }, []);
+
+  // Comprehensive extractor for tasks and incidents from bitacoras and safety logs
+  const extractActivitiesAndIncidents = (logs: WorkLog[], warnings: any[] = []) => {
+    const tasks: WeeklyReportTask[] = [];
+    const incidents: WeeklyReportIncident[] = [];
+
+    logs.forEach(log => {
+      // 1. Activities -> Tasks
+      if (log.activities && Array.isArray(log.activities)) {
+        log.activities.forEach(act => {
+          if (!act.description && !act.item) return;
+          tasks.push({
+            id: `${log.id}-${act.id || Math.random().toString(36).substr(2, 5)}`,
+            name: act.description || 'Actividad operacional',
+            date: log.date,
+            responsible: act.operator || (act.operators && act.operators.length > 0 ? act.operators.join(', ') : 'S/R'),
+            status: act.status || 'pendiente',
+            priority: 'Media',
+            observations: '',
+            photos: act.image ? [act.image] : [],
+            selected: true,
+            tower: act.tower,
+            side: act.side
+          });
+        });
+      }
+
+      // 2. Problems & Deviations
+      if (log.problems && Array.isArray(log.problems)) {
+        log.problems.forEach(prob => {
+          if (!prob.description && !prob.impact && !prob.correctiveAction) return;
+          const impLower = (prob.impact || '').toLowerCase();
+          let gravity: WeeklyReportIncident['gravity'] = 'Media';
+          if (impLower.includes('crítico') || impLower.includes('critico')) gravity = 'Crítica';
+          else if (impLower.includes('alto')) gravity = 'Alta';
+          else if (impLower.includes('bajo')) gravity = 'Baja';
+
+          incidents.push({
+            id: `${log.id}-prob-${prob.id || Math.random().toString(36).substr(2, 5)}`,
+            description: prob.description || 'Desviación o problema en terreno',
+            date: prob.date || log.date,
+            impact: prob.impact || 'Medio',
+            correctiveAction: prob.correctiveAction || 'En revisión',
+            responsible: prob.responsible || log.residentHead || 'Supervisor',
+            gravity,
+            selected: true,
+            isManual: false,
+            image: prob.image
+          });
+        });
+      }
+
+      // 3. Safety Tickets / Registros SSO (Hallazgos, Incidentes, Condiciones Inseguras, EPP)
+      if (log.safety?.tickets && Array.isArray(log.safety.tickets)) {
+        log.safety.tickets.forEach(ticket => {
+          if (!ticket.title && !ticket.description) return;
+          const typeLabel = ticket.type ? ticket.type.replace('_', ' ').toUpperCase() : 'TICKET SSO';
+          const titleStr = ticket.title ? `${ticket.title}` : '';
+          const descStr = ticket.description ? (ticket.title ? ` - ${ticket.description}` : ticket.description) : '';
+          
+          let gravity: WeeklyReportIncident['gravity'] = 'Media';
+          if (ticket.severity === 'Crítica') gravity = 'Crítica';
+          else if (ticket.severity === 'Alta') gravity = 'Alta';
+          else if (ticket.severity === 'Baja') gravity = 'Baja';
+
+          const tDate = (ticket.createdAt && ticket.createdAt.includes('T'))
+            ? ticket.createdAt.split('T')[0]
+            : (ticket.createdAt && ticket.createdAt.match(/^\d{4}-\d{2}-\d{2}$/)) ? ticket.createdAt : log.date;
+
+          incidents.push({
+            id: `${log.id}-ticket-${ticket.id || Math.random().toString(36).substr(2, 5)}`,
+            description: `[${typeLabel}] ${titleStr}${descStr}`,
+            date: tDate,
+            impact: `Ticket SSO (${ticket.type || 'Hallazgo'}) - Estado: ${ticket.status || 'Abierto'}`,
+            correctiveAction: ticket.actionRequired || 'Medida de control y seguimiento preventivo',
+            responsible: ticket.responsible || 'Prevencionista / Supervisor',
+            gravity,
+            selected: true,
+            isManual: false,
+            image: ticket.image
+          });
+        });
+      }
+
+      // 4. Daily Safety Incidents Summary (log.safety.incidents)
+      if (log.safety?.incidents && typeof log.safety.incidents === 'string') {
+        const cleanInc = log.safety.incidents.trim();
+        const lower = cleanInc.toLowerCase();
+        const isNone = lower === 'sin incidentes' || lower === 'ninguno' || lower === 'ninguna' || 
+                       lower === 'sin novedades' || lower === 's/n' || lower === '0' || 
+                       lower === 'no' || lower === 'n/a' || lower === 'sin accidentes' ||
+                       lower === 'todo normal' || lower === 'sin observaciones';
+        if (cleanInc.length > 2 && !isNone) {
+          incidents.push({
+            id: `${log.id}-safety-inc-${Math.random().toString(36).substr(2, 5)}`,
+            description: `[Incidente Diario] ${cleanInc}`,
+            date: log.date,
+            impact: 'Atendido en jornada de obra',
+            correctiveAction: log.safety.observations ? `Obs SSO: ${log.safety.observations}` : 'Revisión y charla preventiva',
+            responsible: log.residentHead || 'Prevención de Riesgos',
+            gravity: lower.includes('grave') || lower.includes('accidente') || lower.includes('crítico') ? 'Alta' : 'Media',
+            selected: true,
+            isManual: false
+          });
+        }
+      }
+
+      // 5. EPP Audits / Inspections (log.safety.eppInspections)
+      if (log.safety?.eppInspections && Array.isArray(log.safety.eppInspections)) {
+        log.safety.eppInspections.forEach(insp => {
+          const nonCompliant = (insp.auditedPeople || []).filter(p => p.status === 'no_cumple' || p.status === 'parcial');
+          if (nonCompliant.length > 0 || (insp.summaryNote && insp.summaryNote.trim().length > 3)) {
+            const names = nonCompliant.map(p => `${p.name}${p.details ? ` (${p.details})` : ''}`).join(', ');
+            const note = insp.summaryNote ? ` - ${insp.summaryNote}` : '';
+            incidents.push({
+              id: `${log.id}-epp-${insp.id || Math.random().toString(36).substr(2, 5)}`,
+              description: `[Inspección EPP${insp.sector ? ` - ${insp.sector}` : ''}] ${nonCompliant.length > 0 ? `${nonCompliant.length} colaboradores con observaciones de EPP: ${names}` : ''}${note}`,
+              date: log.date,
+              impact: 'Desvío en cumplimiento de uso de EPP',
+              correctiveAction: 'Entrega/regularización inmediata de EPP y re-inducción',
+              responsible: insp.inspector || 'Fiscalizador EPP / Prevención',
+              gravity: nonCompliant.length >= 3 ? 'Alta' : 'Media',
+              selected: true,
+              isManual: false,
+              image: insp.image
+            });
+          }
+        });
+      }
+    });
+
+    // 6. Warnings / Sanciones de SSO de la semana
+    if (warnings && Array.isArray(warnings)) {
+      warnings.forEach(w => {
+        const wDate = w.createdAt ? (w.createdAt.includes('T') ? w.createdAt.split('T')[0] : w.createdAt) : '';
+        if (wDate) {
+          incidents.push({
+            id: `warning-${w.id || Math.random().toString(36).substr(2, 5)}`,
+            description: `[Amonestación SSO] ${w.userName || 'Personal'}: ${w.cause || 'Desvío de seguridad'}`,
+            date: wDate,
+            impact: `Falta de conducta / SSO (Severidad: ${w.severity || 'Media'})`,
+            correctiveAction: 'Amonestación formal registrada y compromiso firmado',
+            responsible: 'Prevención de Riesgos / Jefatura',
+            gravity: w.severity === 'Grave' ? 'Alta' : (w.severity === 'Media' ? 'Media' : 'Baja'),
+            selected: true,
+            isManual: false,
+            image: w.photoData
+          });
+        }
+      });
+    }
+
+    // Sort newest first
+    tasks.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    incidents.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    return {
+      tasks,
+      incidents,
+      project: logs.length > 0 ? logs[0].project : undefined,
+      residentHead: logs.length > 0 ? logs[0].residentHead : undefined,
+      workAddress: logs.length > 0 ? logs[0].workAddress : undefined
+    };
+  };
 
   // Fetch Historical Reports
   const fetchHistory = async (silently = false) => {
@@ -170,8 +342,8 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     fetchHistory();
   }, [activeTab]);
 
-  // Load Tasks of the Week Automatically
-  const handleLoadWeekActivities = () => {
+  // Load Tasks and Incidents of the Week Automatically
+  const handleLoadWeekActivities = async () => {
     if (!startDate || !endDate) {
       toast.warning("Por favor ingrese un rango de fechas válido");
       return;
@@ -179,89 +351,66 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
     setLoadingTasks(true);
 
     try {
+      // Get all workLogs either from props or fetch directly for fresh sync
+      let allLogs = workLogs;
+      if (!allLogs || allLogs.length === 0) {
+        allLogs = await firestoreService.getAll<WorkLog>('workLogs');
+      }
+
+      // Also get warnings if any
+      let allWarnings: any[] = [];
+      try {
+        allWarnings = await firestoreService.getAll<any>('warnings');
+      } catch (e) {
+        console.warn("Could not fetch warnings:", e);
+      }
+
       // Filter worklogs by dates on workspace context
-      let filteredLogs = workLogs.filter(log => {
+      let filteredLogs = allLogs.filter(log => {
         const dateOk = log.date >= startDate && log.date <= endDate;
-        const projectOk = !selectedProject || selectedProject === 'all' || 
-          log.project?.trim() === selectedProject;
+        const projectOk = !selectedProject || selectedProject === 'all' || selectedProject === 'todos' ||
+          log.project?.trim().toLowerCase() === selectedProject.trim().toLowerCase();
         return dateOk && projectOk;
       });
 
       // Simple fallback: if nothing matches with selectedProject filter but logs exist for the selected dates
-      if (filteredLogs.length === 0 && selectedProject) {
-        const justDatesLogs = workLogs.filter(log => log.date >= startDate && log.date <= endDate);
+      if (filteredLogs.length === 0 && selectedProject && selectedProject !== 'all' && selectedProject !== 'todos') {
+        const justDatesLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
         if (justDatesLogs.length > 0) {
           toast.info("No se encontraron bitácoras para el proyecto especificado. Cargando todas las de la semana.");
           filteredLogs = justDatesLogs;
         }
       }
 
-      if (filteredLogs.length === 0) {
-        toast.info("No se encontraron bitácoras de obra para el rango especificado.");
-      }
-
-      // Pre-fill metadata from filtered worklogs
-      if (filteredLogs.length > 0 && !selectedProject) {
-        setSelectedProject(filteredLogs[0].project || '');
-      }
-      if (filteredLogs.length > 0 && !responsibleName) {
-        setResponsibleName(filteredLogs[0].residentHead || '');
-      }
-      if (filteredLogs.length > 0 && !selectedArea) {
-        setSelectedArea(filteredLogs[0].workAddress || '');
-      }
-
-      // Map Tasks
-      const allTasksMapped: WeeklyReportTask[] = [];
-      const allIncidentsMapped: WeeklyReportIncident[] = [];
-
-      filteredLogs.forEach(log => {
-        if (log.activities && Array.isArray(log.activities)) {
-          log.activities.forEach(act => {
-            allTasksMapped.push({
-              id: `${log.id}-${act.id}`,
-              name: act.description,
-              date: log.date,
-              responsible: act.operator || (act.operators && act.operators.length > 0 ? act.operators[0] : 'S/R'),
-              status: act.status || 'pendiente',
-              priority: 'Media',
-              observations: '',
-              photos: act.image ? [act.image] : [],
-              selected: true,
-              tower: act.tower,
-              side: act.side
-            });
-          });
-        }
-
-        if (log.problems && Array.isArray(log.problems)) {
-          log.problems.forEach(prob => {
-            allIncidentsMapped.push({
-              id: `${log.id}-${prob.id}`,
-              description: prob.description,
-              date: log.date || log.date,
-              impact: prob.impact,
-              correctiveAction: prob.correctiveAction,
-              responsible: prob.responsible,
-              gravity: prob.impact?.toLowerCase().includes('alto') || prob.impact?.toLowerCase().includes('crítico') ? 'Alta' : 'Media',
-              selected: true,
-              isManual: false,
-              image: prob.image
-            });
-          });
-        }
+      // Filter warnings in date range
+      const filteredWarnings = allWarnings.filter(w => {
+        const wDate = w.createdAt ? (w.createdAt.includes('T') ? w.createdAt.split('T')[0] : w.createdAt) : '';
+        return wDate >= startDate && wDate <= endDate;
       });
 
-      // Sort tasks and incidents newest first (descending by date)
-      allTasksMapped.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      allIncidentsMapped.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+      if (filteredLogs.length === 0 && filteredWarnings.length === 0) {
+        toast.info("No se encontraron bitácoras ni registros para el rango de fechas especificado.");
+      }
 
-      // Avoid duplication
-      setLoadedTasks(allTasksMapped);
-      setLoadedIncidents(allIncidentsMapped);
+      const extracted = extractActivitiesAndIncidents(filteredLogs, filteredWarnings);
+
+      // Pre-fill metadata from filtered worklogs
+      if (extracted.project && !selectedProject) {
+        setSelectedProject(extracted.project);
+      }
+      if (extracted.residentHead && !responsibleName) {
+        setResponsibleName(extracted.residentHead);
+      }
+      if (extracted.workAddress && !selectedArea) {
+        setSelectedArea(extracted.workAddress);
+      }
+
+      // Set state
+      setLoadedTasks(extracted.tasks);
+      setLoadedIncidents(extracted.incidents);
       setGeneratedAIPayload(null); // reset AI state
 
-      toast.success(`Cargadas ${allTasksMapped.length} tareas y ${allIncidentsMapped.length} incidencias.`);
+      toast.success(`Cargadas ${extracted.tasks.length} tareas y ${extracted.incidents.length} incidencias.`);
     } catch (e) {
       console.error(e);
       toast.error("Ocurrió un error al procesar las bitácoras semanales");
@@ -372,64 +521,42 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
       let currentIncidents = loadedIncidents;
 
       // If no tasks loaded yet, auto-load from worklogs
-      if (currentTasks.length === 0) {
+      if (currentTasks.length === 0 && currentIncidents.length === 0) {
         toast.info("Cargando bitácoras para el período seleccionado...");
-        let filteredLogs = workLogs.filter(log => {
+        let allLogs = workLogs;
+        if (!allLogs || allLogs.length === 0) {
+          allLogs = await firestoreService.getAll<WorkLog>('workLogs');
+        }
+        let allWarnings: any[] = [];
+        try {
+          allWarnings = await firestoreService.getAll<any>('warnings');
+        } catch (e) {
+          console.warn("Could not fetch warnings:", e);
+        }
+
+        let filteredLogs = allLogs.filter(log => {
           const dateOk = log.date >= startDate && log.date <= endDate;
-          const projectOk = !selectedProject || selectedProject === 'all' || 
-            log.project?.trim() === selectedProject;
+          const projectOk = !selectedProject || selectedProject === 'all' || selectedProject === 'todos' ||
+            log.project?.trim().toLowerCase() === selectedProject.trim().toLowerCase();
           return dateOk && projectOk;
         });
 
-        if (filteredLogs.length === 0 && selectedProject) {
-          filteredLogs = workLogs.filter(log => log.date >= startDate && log.date <= endDate);
+        if (filteredLogs.length === 0 && selectedProject && selectedProject !== 'all' && selectedProject !== 'todos') {
+          filteredLogs = allLogs.filter(log => log.date >= startDate && log.date <= endDate);
         }
 
-        const autoTasks: WeeklyReportTask[] = [];
-        const autoIncidents: WeeklyReportIncident[] = [];
-
-        filteredLogs.forEach(log => {
-          if (log.activities && Array.isArray(log.activities)) {
-            log.activities.forEach(act => {
-              autoTasks.push({
-                id: `${log.id}-${act.id}`,
-                name: act.description,
-                date: log.date,
-                responsible: act.operator || (act.operators && act.operators.length > 0 ? act.operators[0] : 'S/R'),
-                status: act.status || 'pendiente',
-                priority: 'Media',
-                observations: '',
-                photos: act.image ? [act.image] : [],
-                selected: true,
-                tower: act.tower,
-                side: act.side
-              });
-            });
-          }
-
-          if (log.problems && Array.isArray(log.problems)) {
-            log.problems.forEach(prob => {
-              autoIncidents.push({
-                id: `${log.id}-${prob.id}`,
-                description: prob.description,
-                date: log.date,
-                impact: prob.impact,
-                correctiveAction: prob.correctiveAction,
-                responsible: prob.responsible,
-                gravity: prob.impact?.toLowerCase().includes('alto') || prob.impact?.toLowerCase().includes('crítico') ? 'Alta' : 'Media',
-                selected: true,
-                isManual: false,
-                image: prob.image
-              });
-            });
-          }
+        const filteredWarnings = allWarnings.filter(w => {
+          const wDate = w.createdAt ? (w.createdAt.includes('T') ? w.createdAt.split('T')[0] : w.createdAt) : '';
+          return wDate >= startDate && wDate <= endDate;
         });
 
-        if (autoTasks.length > 0 || autoIncidents.length > 0) {
-          setLoadedTasks(autoTasks);
-          setLoadedIncidents(autoIncidents);
-          currentTasks = autoTasks;
-          currentIncidents = autoIncidents;
+        const extracted = extractActivitiesAndIncidents(filteredLogs, filteredWarnings);
+
+        if (extracted.tasks.length > 0 || extracted.incidents.length > 0) {
+          setLoadedTasks(extracted.tasks);
+          setLoadedIncidents(extracted.incidents);
+          currentTasks = extracted.tasks;
+          currentIncidents = extracted.incidents;
         }
       }
 
@@ -1576,7 +1703,7 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
               )}
 
               {/* Form 3: Incidents list block */}
-              {loadedTasks.length > 0 && (
+              {(loadedTasks.length > 0 || loadedIncidents.length > 0) && (
                 <section className="bg-white border border-zinc-200 rounded-2xl p-6 shadow-sm flex flex-col gap-4">
                   <div className="flex items-center justify-between border-b border-zinc-100 pb-3">
                     <div className="flex items-center gap-2 text-rose-600 font-bold text-sm tracking-wider uppercase">
