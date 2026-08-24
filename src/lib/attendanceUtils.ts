@@ -55,3 +55,34 @@ export function getDelayInfo(timestampISO: string, officialStartTimeStr: string 
     label: 'A tiempo'
   };
 }
+
+export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: string }[]): number {
+  if (!dayLogs || dayLogs.length === 0) return 0;
+  const sortedLogs = [...dayLogs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  
+  let dayMinutes = 0;
+  let lastArrival: Date | null = null;
+  let hasLogsPast2PM = false;
+
+  sortedLogs.forEach(log => {
+    const logDate = parseISO(log.timestamp);
+    if (logDate.getHours() >= 14) {
+      hasLogsPast2PM = true;
+    }
+
+    if (log.type === 'arrival' || log.type === 'break_end') {
+      lastArrival = logDate;
+    } else if ((log.type === 'departure' || log.type === 'break_start') && lastArrival) {
+      const diff = Math.floor((logDate.getTime() - lastArrival.getTime()) / 60000);
+      dayMinutes += Math.max(0, diff);
+      lastArrival = null;
+    }
+  });
+
+  // Descontar una hora (60 minutos) de colación si hay actividades registradas en la tarde (después de las 14:00)
+  if (hasLogsPast2PM && dayMinutes > 60) {
+    dayMinutes = Math.max(0, dayMinutes - 60);
+  }
+
+  return dayMinutes;
+}
