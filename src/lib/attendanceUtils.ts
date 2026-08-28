@@ -62,12 +62,12 @@ export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: st
   
   let dayMinutes = 0;
   let lastArrival: Date | null = null;
-  let hasLogsPast2PM = false;
+  let hasLogsPast1PM = false;
 
   sortedLogs.forEach(log => {
     const logDate = parseISO(log.timestamp);
-    if (logDate.getHours() >= 14) {
-      hasLogsPast2PM = true;
+    if (logDate.getHours() >= 13) {
+      hasLogsPast1PM = true;
     }
 
     if (log.type === 'arrival' || log.type === 'break_end') {
@@ -79,8 +79,8 @@ export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: st
     }
   });
 
-  // Descontar una hora (60 minutos) de colación si hay actividades registradas en la tarde (después de las 14:00)
-  if (hasLogsPast2PM && dayMinutes > 60) {
+  // Descontar una hora (60 minutos) de colación si hay actividades registradas en la tarde (después de las 13:00)
+  if (hasLogsPast1PM && dayMinutes > 60) {
     dayMinutes = Math.max(0, dayMinutes - 60);
   }
 

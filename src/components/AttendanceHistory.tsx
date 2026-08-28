@@ -524,7 +524,7 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
 
         <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
           <Button 
-            onClick={handleOpenManualEntry}
+            onClick={() => handleOpenManualEntry()}
             size="sm"
             className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 h-9 text-xs"
           >
