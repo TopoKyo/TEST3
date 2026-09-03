@@ -56,8 +56,14 @@ export function getDelayInfo(timestampISO: string, officialStartTimeStr: string 
   };
 }
 
-export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: string }[]): number {
-  if (!dayLogs || dayLogs.length === 0) return 0;
+export interface DailyWorkResult {
+  totalMinutes: number;
+  lunchSubtracted: boolean;
+}
+
+export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: string }[]): DailyWorkResult {
+  if (!dayLogs || dayLogs.length === 0) return { totalMinutes: 0, lunchSubtracted: false };
+
   const sortedLogs = [...dayLogs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
   
   let dayMinutes = 0;
@@ -79,10 +85,12 @@ export function calculateDayWorkedMinutes(dayLogs: { type: string; timestamp: st
     }
   });
 
+  let lunchSubtracted = false;
   // Descontar una hora (60 minutos) de colación si hay actividades registradas en la tarde (después de las 13:00)
   if (hasLogsPast1PM && dayMinutes > 60) {
     dayMinutes = Math.max(0, dayMinutes - 60);
+    lunchSubtracted = true;
   }
 
-  return dayMinutes;
+  return { totalMinutes: dayMinutes, lunchSubtracted };
 }

@@ -202,7 +202,7 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
       daysInWeek.forEach(day => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const dayLogs = logs.filter(l => l.userId === user.id && format(parseISO(l.timestamp), 'yyyy-MM-dd') === dateStr);
-        const minutes = calculateDayWorkedMinutes(dayLogs);
+        const minutes = calculateDayWorkedMinutes(dayLogs).totalMinutes;
         
         totalWeeklyMinutes += minutes;
         dailyMinutes.push({
@@ -325,7 +325,7 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
 
       Object.entries(days).forEach(([dateKey, dayLogs]) => {
         activeDays.add(dateKey);
-        const dayMins = calculateDayWorkedMinutes(dayLogs);
+        const dayMins = calculateDayWorkedMinutes(dayLogs).totalMinutes;
 
         dayLogs.forEach(log => {
           if (log.type === 'arrival') {
@@ -368,7 +368,7 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
       weekDays.forEach(d => {
         const dStr = format(d, 'yyyy-MM-dd');
         const dLogs = logs.filter(l => l.userId === selectedUser && format(parseISO(l.timestamp), 'yyyy-MM-dd') === dStr);
-        const mins = calculateDayWorkedMinutes(dLogs);
+        const mins = calculateDayWorkedMinutes(dLogs).totalMinutes;
         if (mins > 0) {
           wMinutes += mins;
           activeDays++;
@@ -1677,7 +1677,8 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
               .filter(l => l.userId === selectedDayBreakdown.user.id && format(parseISO(l.timestamp), 'yyyy-MM-dd') === selectedDayBreakdown.dateStr)
               .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-            const dayWorkedMin = calculateDayWorkedMinutes(currentDayLogs);
+            const dayWorkResult = calculateDayWorkedMinutes(currentDayLogs);
+            const dayWorkedMin = dayWorkResult.totalMinutes;
             const dayWorkedHours = dayWorkedMin / 60;
 
             return (
@@ -1700,9 +1701,16 @@ export default function AttendanceHistory({ logs, users, onUpdate }: AttendanceH
                       </div>
                     </div>
 
-                    <Badge className="bg-neutral-900 text-white font-mono text-xs px-2.5 py-1 rounded-xl">
-                      {dayWorkedHours.toFixed(1)} hrs trabajadas
-                    </Badge>
+                    <div className="flex flex-col items-end gap-1">
+                      {dayWorkResult.lunchSubtracted && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-200 bg-amber-50 font-mono text-[10px] px-2 py-0 rounded-md">
+                          -1h almuerzo
+                        </Badge>
+                      )}
+                      <Badge className="bg-neutral-900 text-white font-mono text-xs px-2.5 py-1 rounded-xl">
+                        {dayWorkedHours.toFixed(1)} hrs trabajadas
+                      </Badge>
+                    </div>
                   </div>
                 </DialogHeader>
 

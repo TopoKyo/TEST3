@@ -2070,12 +2070,12 @@ export default function WeeklyReportModule({ users, workLogs, onReportSaved }: W
                     <div className="border-t border-zinc-100 pt-4 flex flex-col gap-2">
                       <h4 className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest font-mono">Estado de Actividades Semanales</h4>
                       <div className="h-44 w-full">
-                        <ResponsiveContainer width="100%" height="100%">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={10} minHeight={10}>
                           <BarChart data={getTasksChartData()} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                             <XAxis dataKey="name" stroke="#94a3b8" fontSize={10} tickLine={false} />
                             <YAxis stroke="#94a3b8" fontSize={10} tickLine={false} />
-                            <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', fontSize: '11px' }} />
+                            <Tooltip cursor={false} contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', fontSize: '11px' }} />
                             <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} barSize={20}>
                               {getTasksChartData().map((entry, index) => (
                                 <Cell key={`cell-${index}`} fill={entry.fill} />

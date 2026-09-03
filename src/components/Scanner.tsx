@@ -93,8 +93,16 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
           const startTime = performance.now();
           
           try {
-            // Check if video is actually playing/not stuck
-            if (videoRef.current.paused || videoRef.current.ended) return;
+            // Check if video is actually playing/not stuck and has dimensions
+            if (
+              videoRef.current.paused || 
+              videoRef.current.ended || 
+              videoRef.current.readyState < 2 || 
+              !videoRef.current.videoWidth || 
+              !videoRef.current.videoHeight
+            ) {
+              return;
+            }
 
             const results = await faceService.recognizeFace(videoRef.current, matcher);
             const latency = performance.now() - startTime;

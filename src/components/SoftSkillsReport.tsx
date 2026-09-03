@@ -258,7 +258,7 @@ export const SoftSkillsReport: React.FC<SoftSkillsReportProps> = ({ users }) => 
                 </div>
               </div>
               <div className="h-[250px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={10} minHeight={10}>
                   <BarChart data={stats.timeline}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
                     <XAxis 
@@ -275,7 +275,7 @@ export const SoftSkillsReport: React.FC<SoftSkillsReportProps> = ({ users }) => 
                       axisLine={false} 
                       domain={[0, 5]}
                     />
-                    <Tooltip 
+                    <Tooltip cursor={false} 
                       contentStyle={{ backgroundColor: '#09090b', border: '1px solid #27272a', borderRadius: '8px', fontSize: '12px' }}
                       itemStyle={{ color: '#6366f1' }}
                     />
@@ -298,7 +298,7 @@ export const SoftSkillsReport: React.FC<SoftSkillsReportProps> = ({ users }) => 
                     <span className="text-[10px] font-bold uppercase tracking-widest">Radar de Habilidades</span>
                   </div>
                   <div className="h-[200px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
+                    <ResponsiveContainer width="100%" height="100%" minWidth={10} minHeight={10}>
                       <RadarChart cx="50%" cy="50%" outerRadius="80%" data={stats.categoryAverages}>
                         <PolarGrid stroke="#27272a" />
                         <PolarAngleAxis dataKey="fullCat" tick={{ fill: '#71717a', fontSize: 8 }} />

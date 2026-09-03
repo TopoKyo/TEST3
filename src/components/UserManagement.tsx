@@ -65,6 +65,10 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
 
   const capturePhoto = async () => {
     if (videoRef.current && canvasRef.current) {
+      if (!videoRef.current.videoWidth) {
+        toast.error('La cámara aún no está lista, por favor espera un momento.');
+        return;
+      }
       const video = videoRef.current;
       const canvas = canvasRef.current;
       canvas.width = video.videoWidth;
@@ -79,21 +83,29 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
   };
 
   const handleSubmit = async () => {
-    if (!formData.id || !formData.name || !formData.image) {
-      toast.error('Todos los campos son obligatorios');
+    if (!formData.id || !formData.name) {
+      toast.error('El ID y nombre son obligatorios');
       return;
     }
 
     try {
-      // Validate face and get descriptor
-      const img = new Image();
-      img.src = formData.image;
-      await new Promise(resolve => img.onload = resolve);
-      
-      const descriptor = await faceService.getFaceDescriptor(img);
-      if (!descriptor) {
-        toast.error('No se detectó ningún rostro en la foto. Intenta de nuevo.');
-        return;
+      let descriptorArray = [];
+
+      if (formData.image) {
+        const img = new Image();
+        const loadPromise = new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('Image failed to load'));
+        });
+        img.src = formData.image;
+        await loadPromise;
+        
+        const descriptor = await faceService.getFaceDescriptor(img);
+        if (!descriptor) {
+          toast.error('No se detectó ningún rostro en la foto. Intenta de nuevo, o guarda sin foto.');
+          return;
+        }
+        descriptorArray = Array.from(descriptor);
       }
 
       const isDuplicate = !editingUser && users.some(u => u.id === formData.id);
@@ -102,17 +114,25 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
         return;
       }
 
+      const userDataToSave: any = {
+        id: formData.id,
+        name: formData.name,
+        image: formData.image || ''
+      };
+
+      if (descriptorArray.length > 0) {
+         userDataToSave.faceDescriptor = descriptorArray;
+      } else if (editingUser && editingUser.faceDescriptor && !formData.image) {
+         userDataToSave.faceDescriptor = editingUser.faceDescriptor;
+      } else {
+         userDataToSave.faceDescriptor = [];
+      }
+
       if (editingUser) {
-        await firestoreService.update('users', editingUser.id, {
-          ...formData,
-          faceDescriptor: Array.from(descriptor)
-        });
+        await firestoreService.update('users', editingUser.id, userDataToSave);
         toast.success('Usuario actualizado');
       } else {
-        await firestoreService.add('users', {
-          ...formData,
-          faceDescriptor: Array.from(descriptor)
-        });
+        await firestoreService.add('users', userDataToSave);
         toast.success('Usuario creado');
       }
 
@@ -121,7 +141,8 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
       setEditingUser(null);
       setFormData({ id: '', name: '', image: '' });
     } catch (error) {
-      toast.error('Error al guardar usuario');
+      console.error(error);
+      toast.error('Error al guardar: ' + (error.message || error));
     }
   };
 
