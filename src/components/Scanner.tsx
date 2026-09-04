@@ -376,11 +376,17 @@ export default function Scanner({ users, onLogCreated }: ScannerProps) {
               <Card className="border-primary/20 bg-primary/5 border-2 shadow-lg shadow-primary/5">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-6">
-                    <img 
-                      src={recognizedUser.image} 
-                      alt="" 
-                      className="w-24 h-24 rounded-2xl object-cover ring-4 ring-white shadow-xl" 
-                    />
+                    {recognizedUser.image ? (
+                      <img 
+                        src={recognizedUser.image} 
+                        alt="" 
+                        className="w-24 h-24 rounded-2xl object-cover ring-4 ring-white shadow-xl" 
+                      />
+                    ) : (
+                      <div className="w-24 h-24 rounded-2xl bg-white ring-4 ring-white shadow-xl flex items-center justify-center text-primary font-bold text-4xl uppercase">
+                        {recognizedUser.name[0]}
+                      </div>
+                    )}
                     <div>
                       <Badge className="mb-2 bg-primary/20 text-primary hover:bg-primary/20 border-none">Identidad Confirmada</Badge>
                       <h3 className="text-3xl font-bold tracking-tight">{recognizedUser.name}</h3>

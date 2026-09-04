@@ -33,9 +33,6 @@ class FaceService {
     } else if (imageElement instanceof HTMLImageElement) {
       width = imageElement.naturalWidth || imageElement.width;
       height = imageElement.naturalHeight || imageElement.height;
-    } else if (imageElement instanceof HTMLCanvasElement) {
-      width = imageElement.width;
-      height = imageElement.height;
     }
 
     if (!width || !height || width === 0 || height === 0) {
@@ -71,8 +68,10 @@ class FaceService {
   }
 
   createMatcher(users: { name: string; descriptor: number[] }[]) {
-    if (users.length === 0) return null;
-    const labeledDescriptors = users.map(user => {
+    const validUsers = users.filter(u => u.descriptor && u.descriptor.length > 0);
+    if (validUsers.length === 0) return null;
+    
+    const labeledDescriptors = validUsers.map(user => {
       const float32Descriptor = new Float32Array(user.descriptor);
       return new faceapi.LabeledFaceDescriptors(user.name, [float32Descriptor]);
     });
@@ -92,9 +91,6 @@ class FaceService {
     } else if (imageElement instanceof HTMLImageElement) {
       width = imageElement.naturalWidth || imageElement.width;
       height = imageElement.naturalHeight || imageElement.height;
-    } else if (imageElement instanceof HTMLCanvasElement) {
-      width = imageElement.width;
-      height = imageElement.height;
     }
 
     if (!width || !height || width === 0 || height === 0) {

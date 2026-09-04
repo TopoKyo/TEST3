@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Camera, UserPlus, RefreshCw, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Camera, UserPlus, RefreshCw, Users, User as UserIcon } from 'lucide-react';
 import { User } from '@/src/types';
 import { faceService } from '@/src/lib/faceService';
 import { firestoreService } from '@/src/lib/firestoreService';
@@ -288,7 +288,13 @@ export default function UserManagement({ users, onUpdate }: UserManagementProps)
                 users.map((user, index) => (
                   <TableRow key={`${user.id}-${index}`} className="group transition-colors hover:bg-neutral-50/50">
                     <TableCell>
-                      <img src={user.image} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-transparent group-hover:ring-neutral-200 transition-all" />
+                      {user.image ? (
+                        <img src={user.image} alt="" className="w-10 h-10 rounded-xl object-cover ring-2 ring-transparent group-hover:ring-neutral-200 transition-all" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-xl bg-neutral-100 flex items-center justify-center text-neutral-400 ring-2 ring-transparent group-hover:ring-neutral-200 transition-all">
+                          <UserIcon size={20} />
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="font-semibold">{user.name}</TableCell>
                     <TableCell className="font-mono text-xs text-neutral-500">{user.id}</TableCell>
